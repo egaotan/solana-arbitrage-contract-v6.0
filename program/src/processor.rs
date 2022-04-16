@@ -71,7 +71,7 @@ impl Processor {
     //
     let spl_token_program_acc = next_account_info(account_info_iter)?;
     let sys_clock = next_account_info(account_info_iter)?;
-    
+
     //
     {
       let mut usdc_balance_before = 0;
@@ -85,10 +85,10 @@ impl Processor {
         let other_acc_info_before = TokenAccount::unpack(&user_other_acc.try_borrow_data()?)?;
         let other_acc_balance_before = other_acc_info_before.amount;
 
-        msg!("usdc balance before: {}", usdc_acc_amount_before);
+        msg!("usdc balance before: {}", usdc_acc_balance_before);
 
         // saber: buy usdc -> ust, mercurial: sell ust -> usdc
-        let usdc_amount_in = 1000000000
+        let usdc_amount_in = 1000000000;
         Self::saber_swap(
           saber_program_acc.key,
           saber_market_acc,
@@ -98,7 +98,7 @@ impl Processor {
           saber_swap_a_acc,
           saber_swap_b_acc,
           user_other_acc,
-          saber_fee_b_acc,
+          saber_fee_acc,
           spl_token_program_acc,
           sys_clock,
           usdc_amount_in,
@@ -107,7 +107,8 @@ impl Processor {
         let other_acc_info_after = TokenAccount::unpack(&user_other_acc.try_borrow_data()?)?;
         let other_acc_balance_after = other_acc_info_after.amount;
 
-        msg!("mercurial sell, amount in: {}", other_acc_balance_after - other_acc_balance_before);
+        let other_amount_in = other_acc_balance_after - other_acc_balance_before;
+        msg!("mercurial sell, amount in: {}", other_amount_in);
 
         Self::mercurial_swap(
           mercurial_program_acc.key,
@@ -120,7 +121,7 @@ impl Processor {
           user_other_acc,
           user_usdc_acc,
           spl_token_program_acc,
-          amount_in,
+          other_amount_in,
         )?;
 
         let usdc_acc_info_after = TokenAccount::unpack(&user_usdc_acc.try_borrow_data()?)?;
@@ -194,10 +195,11 @@ impl Processor {
     spl_token_program_acc: &AccountInfo<'a>,
     amount_in: u64,
   ) -> ProgramResult {
+
     let swap_accs = [
-      swap_acc1.clone(),
-      swap_acc2.clone(),
-      swap_acc3.clone(),
+      swap_acc1.key,
+      swap_acc2.key,
+      swap_acc3.key,
     ];
     let mercurial_exchange_accounts = [
       market_acc.clone(),
@@ -211,13 +213,13 @@ impl Processor {
       spl_token_program_acc.clone(),
     ];
 
-    let mercurial_exchange_instruction = mercurial::instruction::exchange(
+    let mercurial_exchange_instruction = mercurial_stable_swap_n_pool_instructions::instruction::exchange(
       program_id,
       market_acc.key,
       spl_token_program_acc.key,
       market_auth.key,
       owner_acc.key,
-      swap_accs,
+      swap_accs.to_vec(),
       user_src_acc.key,
       user_dst_acc.key,
       amount_in,

@@ -1,5 +1,5 @@
 use solana_program::program_error::ProgramError;
-use crate::error::ProtocolError;
+use crate::error::ArbitrageError;
 
 pub enum ArbitrageInstruction {
     ///
