@@ -1,0 +1,27 @@
+[package]
+name = "solana-arbitrage"
+version = "0.1.0"
+edition = "2018"
+license = "WTFPL"
+publish = false
+
+[features]
+no-entrypoint = []
+
+[dependencies]
+solana-program = "1.8.5"
+thiserror = "1.0.24"
+spl-token = {version = "3.2.0", features = ["no-entrypoint"]}
+spl-token-swap = {version = "2.1.0", features = ["no-entrypoint"]}
+stable-swap-client = {version = "1.5.5"}
+serum_dex = { version = "0.4.0", git = "https://github.com/blockworks-foundation/serum-dex.git", default-features=false, features = ["no-entrypoint", "program"] }
+mercurial = {git = "https://github.com/mercurial-finance/stable-swap-n-pool-instructions.git", features = ["no-entrypoint"]}
+arrayref = "0.3.6"
+solana-frozen-abi = "=1.8.5"
+zeroize = "=1.3.0"
+num-derive = "0.3.3"
+num-traits = "0.2.14"
+bytemuck = { version = "1.4.0" }
+
+[lib]
+crate-type = ["cdylib", "lib"]
