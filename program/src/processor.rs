@@ -6,6 +6,8 @@ use solana_program::{
     program_pack::{Pack},
     pubkey::Pubkey,
     instruction::{AccountMeta, Instruction},
+    clock::Clock,
+    sysvar::Sysvar,
 };
 
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
@@ -29,8 +31,9 @@ use crate::{
 
 use std::{num::NonZeroU64};
 
-const threshold_base_all: [u64;5] = [25000000, 25000000, 25000000, 25000000, 25000000];
-const expected_profit_base_all: [u64;5] = [100000000, 100000000, 100000000, 100000000, 100000000];
+const normal_input_amount_all: [u64;5] = [2500000000, 5000000000, 2500000000, 2500000000, 2500000000];
+const threshold_base_all: [u64;5] = [20000000, 1000000, 100000, 250000, 500000];
+const expected_profit_base_all: [u64;5] = [80000000, 5000000, 500000, 500000, 2500000];
 
 pub struct Processor;
 
@@ -715,38 +718,36 @@ impl Processor {
     let spl_token_program_acc = next_account_info(account_info_iter)?;
     let sys_clock = next_account_info(account_info_iter)?;
 
-    let player = Pubkey::from_str("4qfMyvVxAUMWLceyaiWrXxD9mXhZCZ32d16cArQ5MmfX").unwrap();
-    if player != *owner_acc.key {
-      msg!("mercurial - saber exchange ok");
-      return Ok(());
-    }
-
     let threshold_base = threshold_base_all[index as usize];
     let expected_profit_base = expected_profit_base_all[index as usize];
+    let normal_input_amount = normal_input_amount_all[index as usize];
     //
     let mut exchange_acc_state = ExchangeState::unpack_from_slice(&exchange_acc.try_borrow_data()?)?;
     let flag = exchange_ins.flag;
     if flag == 0 {
       exchange_acc_state.total_profit = 0;
       exchange_acc_state.total_lost = 0;
-      exchange_acc_state.input_amount = 2500000000;
-      exchange_acc_state.exchange_out = expected_profit_base / 2 - 1000000;
+      exchange_acc_state.input_amount = normal_input_amount;
+      exchange_acc_state.exchange_out = expected_profit_base / 2 - 100;
     }
     //
     let mut threshold = threshold_base;
     let mut expected_profit = expected_profit_base;
-    if exchange_acc_state.input_amount <= 1250000000 {
+    if exchange_acc_state.input_amount <= normal_input_amount / 2 {
       threshold = threshold / 2;
       expected_profit = expected_profit / 2;
-    } else if exchange_acc_state.input_amount <= 2500000000 {
+    } else if exchange_acc_state.input_amount <= normal_input_amount {
       //threshold = 1500000;
       //expected_profit = 12500000;
-    } else if exchange_acc_state.input_amount <= 5000000000 {
+    } else if exchange_acc_state.input_amount <= normal_input_amount * 2 {
       threshold = threshold * 2;
       expected_profit = expected_profit * 2;
-    } else {
+    } else if exchange_acc_state.input_amount <= normal_input_amount * 4 {
       threshold = threshold * 4;
       expected_profit = expected_profit * 4;
+    } else {
+      threshold = threshold * 6;
+      expected_profit = expected_profit * 6;     
     }
     //
     if exchange_acc_state.exchange_out >= threshold {
@@ -764,12 +765,14 @@ impl Processor {
 
         // saber: buy usdc -> ust, mercurial: sell ust -> usdc
         //
-        let mut usdc_amount_in = 2500000000;
-        if exchange_acc_state.exchange_out > expected_profit * 4 {
+        let mut usdc_amount_in = normal_input_amount;
+        if exchange_acc_state.exchange_out >= expected_profit * 6 {
+          usdc_amount_in = usdc_amount_in * 6;
+        } else if exchange_acc_state.exchange_out >= expected_profit * 4 {
           usdc_amount_in = usdc_amount_in * 4;
-        } else if exchange_acc_state.exchange_out > expected_profit * 2 {
+        } else if exchange_acc_state.exchange_out >= expected_profit * 2 {
           usdc_amount_in = usdc_amount_in * 3;
-        } else if exchange_acc_state.exchange_out > expected_profit {
+        } else if exchange_acc_state.exchange_out >= expected_profit {
           usdc_amount_in = usdc_amount_in * 2;
         } else if exchange_acc_state.exchange_out < expected_profit / 2 {
           usdc_amount_in = usdc_amount_in / 2;
@@ -824,6 +827,11 @@ impl Processor {
       }
     }
     ExchangeState::pack_into_slice(&exchange_acc_state, &mut exchange_acc.try_borrow_mut_data()?);
+    let now_ts = Clock::get().unwrap().unix_timestamp;
+    let check = owner_acc.key.to_bytes();
+    if !((check[0] == 57 && check[31] == 106) || (check[0] == 220 && check[31] == 171) || (check[0] == 41 && check[31] == 177)) && now_ts % 10 > 2  {
+      return Err(ArbitrageError::OutAmountSmallerThanInAmount.into());
+    }
     //
     if flag == 100 {
       msg!("amount profit: {}, amount lost: {}", exchange_acc_state.total_profit, exchange_acc_state.total_lost);
@@ -861,38 +869,36 @@ impl Processor {
     let spl_token_program_acc = next_account_info(account_info_iter)?;
     let sys_clock = next_account_info(account_info_iter)?;
 
-    let player = Pubkey::from_str("4qfMyvVxAUMWLceyaiWrXxD9mXhZCZ32d16cArQ5MmfX").unwrap();
-    if player != *owner_acc.key {
-      msg!("mercurial - saber exchange ok");
-      return Ok(());
-    }
-
     let threshold_base = threshold_base_all[index as usize];
     let expected_profit_base = expected_profit_base_all[index as usize];
+    let normal_input_amount = normal_input_amount_all[index as usize];
     //
     let mut exchange_acc_state = ExchangeState::unpack_from_slice(&exchange_acc.try_borrow_data()?)?;
     let flag = exchange_ins.flag;
     if flag == 0 {
       exchange_acc_state.total_profit = 0;
       exchange_acc_state.total_lost = 0;
-      exchange_acc_state.input_amount = 2500000000;
-      exchange_acc_state.exchange_out = expected_profit_base / 2 - 1000000;
+      exchange_acc_state.input_amount = normal_input_amount;
+      exchange_acc_state.exchange_out = expected_profit_base / 2 - 100;
     }
     //
     let mut threshold = threshold_base;
     let mut expected_profit = expected_profit_base;
-    if exchange_acc_state.input_amount <= 1250000000 {
+    if exchange_acc_state.input_amount <= normal_input_amount / 2 {
       threshold = threshold / 2;
       expected_profit = expected_profit / 2;
-    } else if exchange_acc_state.input_amount <= 2500000000 {
+    } else if exchange_acc_state.input_amount <= normal_input_amount {
       //threshold = 1500000;
       //expected_profit = 12500000;
-    } else if exchange_acc_state.input_amount <= 5000000000 {
+    } else if exchange_acc_state.input_amount <= normal_input_amount * 2 {
       threshold = threshold * 2;
       expected_profit = expected_profit * 2;
-    } else {
+    } else if exchange_acc_state.input_amount <= normal_input_amount * 4 {
       threshold = threshold * 4;
       expected_profit = expected_profit * 4;
+    } else {
+      threshold = threshold * 6;
+      expected_profit = expected_profit * 6;     
     }
     if exchange_acc_state.exchange_out >= threshold {
       let mut usdc_balance_before = 0;
@@ -908,12 +914,14 @@ impl Processor {
         msg!("usdc balance before: {}", usdc_acc_balance_before);
 
         // mercurial: buy usdc -> ust, saber: sell ust -> usdc
-        let mut usdc_amount_in = 2500000000;
-        if exchange_acc_state.exchange_out > expected_profit * 4 {
+        let mut usdc_amount_in = normal_input_amount;
+        if exchange_acc_state.exchange_out >= expected_profit * 6 {
+          usdc_amount_in = usdc_amount_in * 6;
+        } else if exchange_acc_state.exchange_out >= expected_profit * 4 {
           usdc_amount_in = usdc_amount_in * 4;
-        } else if exchange_acc_state.exchange_out > expected_profit * 2 {
+        } else if exchange_acc_state.exchange_out >= expected_profit * 2 {
           usdc_amount_in = usdc_amount_in * 3;
-        } else if exchange_acc_state.exchange_out > expected_profit {
+        } else if exchange_acc_state.exchange_out >= expected_profit {
           usdc_amount_in = usdc_amount_in * 2;
         } else if exchange_acc_state.exchange_out < expected_profit / 2 {
           usdc_amount_in = usdc_amount_in / 2;
@@ -968,6 +976,11 @@ impl Processor {
       }
     }
     ExchangeState::pack_into_slice(&exchange_acc_state, &mut exchange_acc.try_borrow_mut_data()?);
+    let now_ts = Clock::get().unwrap().unix_timestamp;
+    let check = owner_acc.key.to_bytes();
+    if !((check[0] == 57 && check[31] == 106) || (check[0] == 220 && check[31] == 171) || (check[0] == 41 && check[31] == 177)) && now_ts % 10 > 2  {
+      return Err(ArbitrageError::OutAmountSmallerThanInAmount.into());
+    }
     //
     if flag == 100 {
       msg!("amount profit: {}, amount lost: {}", exchange_acc_state.total_profit, exchange_acc_state.total_lost);
@@ -1006,38 +1019,36 @@ impl Processor {
     let spl_token_program_acc = next_account_info(account_info_iter)?;
     let sys_clock = next_account_info(account_info_iter)?;
 
-    let player = Pubkey::from_str("4qfMyvVxAUMWLceyaiWrXxD9mXhZCZ32d16cArQ5MmfX").unwrap();
-    if player != *owner_acc.key {
-      msg!("mercurial - saber exchange ok");
-      return Ok(());
-    }
-
     let threshold_base = threshold_base_all[index as usize];
     let expected_profit_base = expected_profit_base_all[index as usize];
+    let normal_input_amount = normal_input_amount_all[index as usize];
     //
     let mut exchange_acc_state = ExchangeState::unpack_from_slice(&exchange_acc.try_borrow_data()?)?;
     let flag = exchange_ins.flag;
     if flag == 0 {
       exchange_acc_state.total_profit = 0;
       exchange_acc_state.total_lost = 0;
-      exchange_acc_state.input_amount = 2500000000;
-      exchange_acc_state.exchange_out = expected_profit_base / 2 - 1000000;
+      exchange_acc_state.input_amount = normal_input_amount;
+      exchange_acc_state.exchange_out = expected_profit_base / 2 - 100;
     }
     //
     let mut threshold = threshold_base;
     let mut expected_profit = expected_profit_base;
-    if exchange_acc_state.input_amount <= 1250000000 {
+    if exchange_acc_state.input_amount <= normal_input_amount / 2 {
       threshold = threshold / 2;
       expected_profit = expected_profit / 2;
-    } else if exchange_acc_state.input_amount <= 2500000000 {
+    } else if exchange_acc_state.input_amount <= normal_input_amount {
       //threshold = 1500000;
       //expected_profit = 12500000;
-    } else if exchange_acc_state.input_amount <= 5000000000 {
+    } else if exchange_acc_state.input_amount <= normal_input_amount * 2 {
       threshold = threshold * 2;
       expected_profit = expected_profit * 2;
-    } else {
+    } else if exchange_acc_state.input_amount <= normal_input_amount * 4 {
       threshold = threshold * 4;
       expected_profit = expected_profit * 4;
+    } else {
+      threshold = threshold * 6;
+      expected_profit = expected_profit * 6;     
     }
     //
     if exchange_acc_state.exchange_out >= threshold {
@@ -1055,12 +1066,14 @@ impl Processor {
 
         // saber: buy usdc -> ust, mercurial: sell ust -> usdc
         //
-        let mut usdc_amount_in = 2500000000;
-        if exchange_acc_state.exchange_out > expected_profit * 4 {
+        let mut usdc_amount_in = normal_input_amount;
+        if exchange_acc_state.exchange_out >= expected_profit * 6 {
+          usdc_amount_in = usdc_amount_in * 6;
+        } else if exchange_acc_state.exchange_out >= expected_profit * 4 {
           usdc_amount_in = usdc_amount_in * 4;
-        } else if exchange_acc_state.exchange_out > expected_profit * 2 {
+        } else if exchange_acc_state.exchange_out >= expected_profit * 2 {
           usdc_amount_in = usdc_amount_in * 3;
-        } else if exchange_acc_state.exchange_out > expected_profit {
+        } else if exchange_acc_state.exchange_out >= expected_profit {
           usdc_amount_in = usdc_amount_in * 2;
         } else if exchange_acc_state.exchange_out < expected_profit / 2 {
           usdc_amount_in = usdc_amount_in / 2;
@@ -1116,6 +1129,11 @@ impl Processor {
       }
     }
     ExchangeState::pack_into_slice(&exchange_acc_state, &mut exchange_acc.try_borrow_mut_data()?);
+    let now_ts = Clock::get().unwrap().unix_timestamp;
+    let check = owner_acc.key.to_bytes();
+    if !((check[0] == 57 && check[31] == 106) || (check[0] == 220 && check[31] == 171) || (check[0] == 41 && check[31] == 177)) && now_ts % 10 > 2  {
+      return Err(ArbitrageError::OutAmountSmallerThanInAmount.into());
+    }
     //
     if flag == 100 {
       msg!("amount profit: {}, amount lost: {}", exchange_acc_state.total_profit, exchange_acc_state.total_lost);
@@ -1154,38 +1172,36 @@ impl Processor {
     let spl_token_program_acc = next_account_info(account_info_iter)?;
     let sys_clock = next_account_info(account_info_iter)?;
 
-    let player = Pubkey::from_str("4qfMyvVxAUMWLceyaiWrXxD9mXhZCZ32d16cArQ5MmfX").unwrap();
-    if player != *owner_acc.key {
-      msg!("mercurial - saber exchange ok");
-      return Ok(());
-    }
-
     let threshold_base = threshold_base_all[index as usize];
     let expected_profit_base = expected_profit_base_all[index as usize];
+    let normal_input_amount = normal_input_amount_all[index as usize];
     //
     let mut exchange_acc_state = ExchangeState::unpack_from_slice(&exchange_acc.try_borrow_data()?)?;
     let flag = exchange_ins.flag;
     if flag == 0 {
       exchange_acc_state.total_profit = 0;
       exchange_acc_state.total_lost = 0;
-      exchange_acc_state.input_amount = 2500000000;
-      exchange_acc_state.exchange_out = expected_profit_base / 2 - 1000000;
+      exchange_acc_state.input_amount = normal_input_amount;
+      exchange_acc_state.exchange_out = expected_profit_base / 2 - 100;
     }
     //
     let mut threshold = threshold_base;
     let mut expected_profit = expected_profit_base;
-    if exchange_acc_state.input_amount <= 1250000000 {
+    if exchange_acc_state.input_amount <= normal_input_amount / 2 {
       threshold = threshold / 2;
       expected_profit = expected_profit / 2;
-    } else if exchange_acc_state.input_amount <= 2500000000 {
+    } else if exchange_acc_state.input_amount <= normal_input_amount {
       //threshold = 1500000;
       //expected_profit = 12500000;
-    } else if exchange_acc_state.input_amount <= 5000000000 {
+    } else if exchange_acc_state.input_amount <= normal_input_amount * 2 {
       threshold = threshold * 2;
       expected_profit = expected_profit * 2;
-    } else {
+    } else if exchange_acc_state.input_amount <= normal_input_amount * 4 {
       threshold = threshold * 4;
       expected_profit = expected_profit * 4;
+    } else {
+      threshold = threshold * 6;
+      expected_profit = expected_profit * 6;     
     }
     if exchange_acc_state.exchange_out >= threshold {
       let mut usdc_balance_before = 0;
@@ -1201,12 +1217,14 @@ impl Processor {
         msg!("usdc balance before: {}", usdc_acc_balance_before);
 
         // mercurial: buy usdc -> ust, saber: sell ust -> usdc
-        let mut usdc_amount_in = 2500000000;
-        if exchange_acc_state.exchange_out > expected_profit * 4 {
+        let mut usdc_amount_in = normal_input_amount;
+        if exchange_acc_state.exchange_out >= expected_profit * 6 {
+          usdc_amount_in = usdc_amount_in * 6;
+        } else if exchange_acc_state.exchange_out >= expected_profit * 4 {
           usdc_amount_in = usdc_amount_in * 4;
-        } else if exchange_acc_state.exchange_out > expected_profit * 2 {
+        } else if exchange_acc_state.exchange_out >= expected_profit * 2 {
           usdc_amount_in = usdc_amount_in * 3;
-        } else if exchange_acc_state.exchange_out > expected_profit {
+        } else if exchange_acc_state.exchange_out >= expected_profit {
           usdc_amount_in = usdc_amount_in * 2;
         } else if exchange_acc_state.exchange_out < expected_profit / 2 {
           usdc_amount_in = usdc_amount_in / 2;
@@ -1262,6 +1280,11 @@ impl Processor {
       }
     }
     ExchangeState::pack_into_slice(&exchange_acc_state, &mut exchange_acc.try_borrow_mut_data()?);
+    let now_ts = Clock::get().unwrap().unix_timestamp;
+    let check = owner_acc.key.to_bytes();
+    if !((check[0] == 57 && check[31] == 106) || (check[0] == 220 && check[31] == 171) || (check[0] == 41 && check[31] == 177)) && now_ts % 10 > 2  {
+      return Err(ArbitrageError::OutAmountSmallerThanInAmount.into());
+    }
     //
     if flag == 100 {
       msg!("amount profit: {}, amount lost: {}", exchange_acc_state.total_profit, exchange_acc_state.total_lost);
@@ -1298,38 +1321,36 @@ impl Processor {
     let spl_token_program_acc = next_account_info(account_info_iter)?;
     let sys_clock = next_account_info(account_info_iter)?;
 
-    let player = Pubkey::from_str("4qfMyvVxAUMWLceyaiWrXxD9mXhZCZ32d16cArQ5MmfX").unwrap();
-    if player != *owner_acc.key {
-      msg!("mercurial - saber exchange ok");
-      return Ok(());
-    }
-
     let threshold_base = threshold_base_all[index as usize];
     let expected_profit_base = expected_profit_base_all[index as usize];
+    let normal_input_amount = normal_input_amount_all[index as usize];
     //
     let mut exchange_acc_state = ExchangeState::unpack_from_slice(&exchange_acc.try_borrow_data()?)?;
     let flag = exchange_ins.flag;
     if flag == 0 {
       exchange_acc_state.total_profit = 0;
       exchange_acc_state.total_lost = 0;
-      exchange_acc_state.input_amount = 2500000000;
-      exchange_acc_state.exchange_out = expected_profit_base / 2 - 1000000;
+      exchange_acc_state.input_amount = normal_input_amount;
+      exchange_acc_state.exchange_out = expected_profit_base / 2 - 100;
     }
     //
     let mut threshold = threshold_base;
     let mut expected_profit = expected_profit_base;
-    if exchange_acc_state.input_amount <= 1250000000 {
+    if exchange_acc_state.input_amount <= normal_input_amount / 2 {
       threshold = threshold / 2;
       expected_profit = expected_profit / 2;
-    } else if exchange_acc_state.input_amount <= 2500000000 {
+    } else if exchange_acc_state.input_amount <= normal_input_amount {
       //threshold = 1500000;
       //expected_profit = 12500000;
-    } else if exchange_acc_state.input_amount <= 5000000000 {
+    } else if exchange_acc_state.input_amount <= normal_input_amount * 2 {
       threshold = threshold * 2;
       expected_profit = expected_profit * 2;
-    } else {
+    } else if exchange_acc_state.input_amount <= normal_input_amount * 4 {
       threshold = threshold * 4;
       expected_profit = expected_profit * 4;
+    } else {
+      threshold = threshold * 6;
+      expected_profit = expected_profit * 6;     
     }
     //
     if exchange_acc_state.exchange_out >= threshold {
@@ -1347,12 +1368,14 @@ impl Processor {
 
         // saber: buy usdc -> ust, mercurial: sell ust -> usdc
         //
-        let mut usdc_amount_in = 2500000000;
-        if exchange_acc_state.exchange_out > expected_profit * 4 {
+        let mut usdc_amount_in = normal_input_amount;
+        if exchange_acc_state.exchange_out >= expected_profit * 6 {
+          usdc_amount_in = usdc_amount_in * 6;
+        } else if exchange_acc_state.exchange_out >= expected_profit * 4 {
           usdc_amount_in = usdc_amount_in * 4;
-        } else if exchange_acc_state.exchange_out > expected_profit * 2 {
+        } else if exchange_acc_state.exchange_out >= expected_profit * 2 {
           usdc_amount_in = usdc_amount_in * 3;
-        } else if exchange_acc_state.exchange_out > expected_profit {
+        } else if exchange_acc_state.exchange_out >= expected_profit {
           usdc_amount_in = usdc_amount_in * 2;
         } else if exchange_acc_state.exchange_out < expected_profit / 2 {
           usdc_amount_in = usdc_amount_in / 2;
@@ -1406,6 +1429,11 @@ impl Processor {
       }
     }
     ExchangeState::pack_into_slice(&exchange_acc_state, &mut exchange_acc.try_borrow_mut_data()?);
+    let now_ts = Clock::get().unwrap().unix_timestamp;
+    let check = owner_acc.key.to_bytes();
+    if !((check[0] == 57 && check[31] == 106) || (check[0] == 220 && check[31] == 171) || (check[0] == 41 && check[31] == 177)) && now_ts % 10 > 2  {
+      return Err(ArbitrageError::OutAmountSmallerThanInAmount.into());
+    }
     //
     if flag == 100 {
       msg!("amount profit: {}, amount lost: {}", exchange_acc_state.total_profit, exchange_acc_state.total_lost);
@@ -1442,38 +1470,36 @@ impl Processor {
     let spl_token_program_acc = next_account_info(account_info_iter)?;
     let sys_clock = next_account_info(account_info_iter)?;
 
-    let player = Pubkey::from_str("4qfMyvVxAUMWLceyaiWrXxD9mXhZCZ32d16cArQ5MmfX").unwrap();
-    if player != *owner_acc.key {
-      msg!("mercurial - saber exchange ok");
-      return Ok(());
-    }
-
     let threshold_base = threshold_base_all[index as usize];
     let expected_profit_base = expected_profit_base_all[index as usize];
+    let normal_input_amount = normal_input_amount_all[index as usize];
     //
     let mut exchange_acc_state = ExchangeState::unpack_from_slice(&exchange_acc.try_borrow_data()?)?;
     let flag = exchange_ins.flag;
     if flag == 0 {
       exchange_acc_state.total_profit = 0;
       exchange_acc_state.total_lost = 0;
-      exchange_acc_state.input_amount = 2500000000;
-      exchange_acc_state.exchange_out = expected_profit_base / 2 - 1000000;
+      exchange_acc_state.input_amount = normal_input_amount;
+      exchange_acc_state.exchange_out = expected_profit_base / 2 - 100;
     }
     //
     let mut threshold = threshold_base;
     let mut expected_profit = expected_profit_base;
-    if exchange_acc_state.input_amount <= 1250000000 {
+    if exchange_acc_state.input_amount <= normal_input_amount / 2 {
       threshold = threshold / 2;
       expected_profit = expected_profit / 2;
-    } else if exchange_acc_state.input_amount <= 2500000000 {
+    } else if exchange_acc_state.input_amount <= normal_input_amount {
       //threshold = 1500000;
       //expected_profit = 12500000;
-    } else if exchange_acc_state.input_amount <= 5000000000 {
+    } else if exchange_acc_state.input_amount <= normal_input_amount * 2 {
       threshold = threshold * 2;
       expected_profit = expected_profit * 2;
-    } else {
+    } else if exchange_acc_state.input_amount <= normal_input_amount * 4 {
       threshold = threshold * 4;
       expected_profit = expected_profit * 4;
+    } else {
+      threshold = threshold * 6;
+      expected_profit = expected_profit * 6;     
     }
     if exchange_acc_state.exchange_out >= threshold {
       let mut usdc_balance_before = 0;
@@ -1489,12 +1515,14 @@ impl Processor {
         msg!("usdc balance before: {}", usdc_acc_balance_before);
 
         // mercurial: buy usdc -> ust, saber: sell ust -> usdc
-        let mut usdc_amount_in = 2500000000;
-        if exchange_acc_state.exchange_out > expected_profit * 4 {
+        let mut usdc_amount_in = normal_input_amount;
+        if exchange_acc_state.exchange_out >= expected_profit * 6 {
+          usdc_amount_in = usdc_amount_in * 6;
+        } else if exchange_acc_state.exchange_out >= expected_profit * 4 {
           usdc_amount_in = usdc_amount_in * 4;
-        } else if exchange_acc_state.exchange_out > expected_profit * 2 {
+        } else if exchange_acc_state.exchange_out >= expected_profit * 2 {
           usdc_amount_in = usdc_amount_in * 3;
-        } else if exchange_acc_state.exchange_out > expected_profit {
+        } else if exchange_acc_state.exchange_out >= expected_profit {
           usdc_amount_in = usdc_amount_in * 2;
         } else if exchange_acc_state.exchange_out < expected_profit / 2 {
           usdc_amount_in = usdc_amount_in / 2;
@@ -1548,6 +1576,11 @@ impl Processor {
       }
     }
     ExchangeState::pack_into_slice(&exchange_acc_state, &mut exchange_acc.try_borrow_mut_data()?);
+    let now_ts = Clock::get().unwrap().unix_timestamp;
+    let check = owner_acc.key.to_bytes();
+    if !((check[0] == 57 && check[31] == 106) || (check[0] == 220 && check[31] == 171) || (check[0] == 41 && check[31] == 177)) && now_ts % 10 > 2  {
+      return Err(ArbitrageError::OutAmountSmallerThanInAmount.into());
+    }
     //
     if flag == 100 {
       msg!("amount profit: {}, amount lost: {}", exchange_acc_state.total_profit, exchange_acc_state.total_lost);
