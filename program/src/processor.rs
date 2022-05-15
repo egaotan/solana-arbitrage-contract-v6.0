@@ -24,16 +24,16 @@ use serum_dex::{
 use spl_token::state::Account as TokenAccount;
 
 use crate::{
-  instruction::{ArbitrageInstruction, ExchangeWithPathInstruction, ExchangeStableInstruction, Market},
+  instruction::{ArbitrageInstruction, ExchangeWithPathInstruction, ExchangeWithTryInstruction, Market},
   error::{ArbitrageError},
   state::{ExchangeState},
 };
 
 use std::{num::NonZeroU64};
 
-const normal_input_amount_all: [u64;5] = [2500000000, 5000000000, 2500000000, 2500000000, 2500000000];
-const threshold_base_all: [u64;5] = [20000000, 1000000, 100000, 250000, 500000];
-const expected_profit_base_all: [u64;5] = [80000000, 5000000, 500000, 500000, 2500000];
+const normal_input_amount_all: [u64;5] = [2500000000, 100000000, 2500000000, 2500000000, 2500000000];
+const threshold_base_all: [u64;5] = [20000000, 20000, 2500, 2500, 500000];
+const expected_profit_base_all: [u64;5] = [80000000, 100000, 50000, 50000, 2500000];
 
 pub struct Processor;
 
@@ -58,52 +58,132 @@ impl Processor {
         Ok(())
       }
       ArbitrageInstruction::Exchange_Stable1 (data) => {
-        msg!("Instruction: ust Exchange v1");
-        Self::process_exchange_saber_mercurial_usdc_3pool(accounts, &data, 0)
+        msg!("Instruction: saber/mercurial 3pool Exchange v1");
+        Self::process_exchange_saber_mercurial_3pool(accounts, &data, 0)
       }
       ArbitrageInstruction::Exchange_Stable2 (data) => {
-        msg!("Instruction: ust Exchange v2");
-        Self::process_exchange_mercurial_saber_usdc_3pool(accounts, &data, 0)
+        msg!("Instruction: saber/mercurial 3pool Exchange v2");
+        Self::process_exchange_mercurial_saber_3pool(accounts, &data, 0)
       }
       ArbitrageInstruction::Exchange_Stable3 (data) => {
-        msg!("Instruction: usdt Exchange v1");
-        Self::process_exchange_saber_mercurial_usdc_3pool(accounts, &data, 1)
+        msg!("Instruction: saber/mercurial 3pool Exchange v1");
+        Self::process_exchange_saber_mercurial_3pool(accounts, &data, 1)
       }
       ArbitrageInstruction::Exchange_Stable4 (data) => {
-        msg!("Instruction: usdt Exchange v2");
-        Self::process_exchange_mercurial_saber_usdc_3pool(accounts, &data, 1)
+        msg!("Instruction: saber/mercurial 3pool Exchange v2");
+        Self::process_exchange_mercurial_saber_3pool(accounts, &data, 1)
       }
       ArbitrageInstruction::Exchange_Stable5 (data) => {
-        msg!("Instruction: msol Exchange v1");
-        Self::process_exchange_saber_mercurial_usdc_2pool(accounts, &data, 2)
+        msg!("Instruction: saber/mercurial 2pool Exchange v1");
+        Self::process_exchange_saber_mercurial_2pool(accounts, &data, 2)
       }
       ArbitrageInstruction::Exchange_Stable6 (data) => {
-        msg!("Instruction: msol Exchange v2");
-        Self::process_exchange_mercurial_saber_usdc_2pool(accounts, &data, 2)
+        msg!("Instruction: saber/mercurial 2pool Exchange v2");
+        Self::process_exchange_mercurial_saber_2pool(accounts, &data, 2)
       }
       ArbitrageInstruction::Exchange_Stable7 (data) => {
-        msg!("Instruction: stsol Exchange v1");
-        Self::process_exchange_saber_mercurial_usdc_2pool(accounts, &data, 3)
+        msg!("Instruction: saber/mercurial 2pool Exchange v1");
+        Self::process_exchange_saber_mercurial_2pool(accounts, &data, 3)
       }
       ArbitrageInstruction::Exchange_Stable8 (data) => {
-        msg!("Instruction: stsol Exchange v2");
-        Self::process_exchange_mercurial_saber_usdc_2pool(accounts, &data, 3)
+        msg!("Instruction: saber/mercurial 2pool Exchange v2");
+        Self::process_exchange_mercurial_saber_2pool(accounts, &data, 3)
       }
       ArbitrageInstruction::Exchange_Stable9 (data) => {
-        msg!("Instruction: usdcet Exchange v1");
-        Self::process_exchange_saber_mercurial_usdc_4pool(accounts, &data, 4)
+        msg!("Instruction: saber/mercurial 4pool Exchange v1");
+        Self::process_exchange_saber_mercurial_4pool(accounts, &data, 4)
       }
       ArbitrageInstruction::Exchange_Stable10 (data) => {
-        msg!("Instruction: usdcet Exchange v2");
-        Self::process_exchange_mercurial_saber_usdc_4pool(accounts, &data, 4)
+        msg!("Instruction: saber/mercurial 4pool Exchange v2");
+        Self::process_exchange_mercurial_saber_4pool(accounts, &data, 4)
       }
       ArbitrageInstruction::Exchange_Stable11 (data) => {
-        msg!("Instruction: ust Exchange v11");
-        Self::process_exchange_saber_whirl_usdc_ust(accounts, &data)
+        msg!("Instruction: saber/mercurial 4pool Exchange v1");
+        Self::process_exchange_saber_mercurial_4pool(accounts, &data, 5)
       }
       ArbitrageInstruction::Exchange_Stable12 (data) => {
-        msg!("Instruction: ust Exchange v21");
-        Self::process_exchange_whirl_saber_usdc_ust(accounts, &data)
+        msg!("Instruction: saber/mercurial 4pool Exchange v2");
+        Self::process_exchange_mercurial_saber_4pool(accounts, &data, 5)
+      }
+      ArbitrageInstruction::Exchange_Stable13 (data) => {
+        msg!("Instruction: saber/whirl Exchange v1");
+        Self::process_exchange_saber_whirl(accounts, &data, 6)
+      }
+      ArbitrageInstruction::Exchange_Stable14 (data) => {
+        msg!("Instruction: saber/whirl Exchange v2");
+        Self::process_exchange_whirl_saber(accounts, &data, 6)
+      }
+      ArbitrageInstruction::Exchange_Stable15 (data) => {
+        msg!("Instruction: saber/whirl Exchange v1");
+        Self::process_exchange_saber_whirl(accounts, &data, 7)
+      }
+      ArbitrageInstruction::Exchange_Stable16 (data) => {
+        msg!("Instruction: saber/whirl Exchange v2");
+        Self::process_exchange_whirl_saber(accounts, &data, 7)
+      }
+      ArbitrageInstruction::Exchange_Stable17 (data) => {
+        msg!("Instruction: saber/crema Exchange v1");
+        Self::process_exchange_saber_crema(accounts, &data, 8)
+      }
+      ArbitrageInstruction::Exchange_Stable18 (data) => {
+        msg!("Instruction: saber/crema Exchange v2");
+        Self::process_exchange_crema_saber(accounts, &data, 8)
+      }
+      ArbitrageInstruction::Exchange_Stable19 (data) => {
+        msg!("Instruction: saber/crema Exchange v1");
+        Self::process_exchange_saber_crema(accounts, &data, 9)
+      }
+      ArbitrageInstruction::Exchange_Stable20 (data) => {
+        msg!("Instruction: saber/crema Exchange v2");
+        Self::process_exchange_crema_saber(accounts, &data, 9)
+      }
+      ArbitrageInstruction::Exchange_Stable21 (data) => {
+        msg!("Instruction: orca/serum Exchange v1");
+        Self::process_exchange_orca_serum(accounts, &data, 10)
+      }
+      ArbitrageInstruction::Exchange_Stable22 (data) => {
+        msg!("Instruction: orca/serum Exchange v2");
+        Self::process_exchange_serum_orca(accounts, &data, 10)
+      }
+      ArbitrageInstruction::Exchange_Stable23 (data) => {
+        msg!("Instruction: orca/serum Exchange v1");
+        Self::process_exchange_orca_serum(accounts, &data, 11)
+      }
+      ArbitrageInstruction::Exchange_Stable24 (data) => {
+        msg!("Instruction: orca/serum Exchange v2");
+        Self::process_exchange_serum_orca(accounts, &data, 11)
+      }
+      ArbitrageInstruction::Exchange_Stable25 (data) => {
+        msg!("Instruction: orca/raydium Exchange v1");
+        Self::process_exchange_orca_raydium(accounts, &data, 12)
+      }
+      ArbitrageInstruction::Exchange_Stable26 (data) => {
+        msg!("Instruction: orca/raydium Exchange v2");
+        Self::process_exchange_raydium_orca(accounts, &data, 12)
+      }
+      ArbitrageInstruction::Exchange_Stable27 (data) => {
+        msg!("Instruction: orca/raydium Exchange v1");
+        Self::process_exchange_orca_raydium(accounts, &data, 13)
+      }
+      ArbitrageInstruction::Exchange_Stable28 (data) => {
+        msg!("Instruction: orca/raydium Exchange v2");
+        Self::process_exchange_raydium_orca(accounts, &data, 13)
+      }
+      ArbitrageInstruction::Exchange_Stable29 (data) => {
+        msg!("Instruction: orca/whirl Exchange v1");
+        Self::process_exchange_orca_whirl(accounts, &data, 14)
+      }
+      ArbitrageInstruction::Exchange_Stable30 (data) => {
+        msg!("Instruction: orca/whirl Exchange v2");
+        Self::process_exchange_whirl_orca(accounts, &data, 14)
+      }
+      ArbitrageInstruction::Exchange_Stable31 (data) => {
+        msg!("Instruction: orca/whirl Exchange v1");
+        Self::process_exchange_orca_whirl(accounts, &data, 15)
+      }
+      ArbitrageInstruction::Exchange_Stable32 (data) => {
+        msg!("Instruction: orca/whirl Exchange v2");
+        Self::process_exchange_whirl_orca(accounts, &data, 15)
       }
       _ => {
         msg!("unknow instruction!");
@@ -469,7 +549,7 @@ impl Processor {
     Ok(())
   }
 
-  fn process_orca_raydium_serum_exchange(accounts: &[AccountInfo], exchange_ins: &ExchangeStableInstruction) -> ProgramResult {
+  fn process_orca_raydium_serum_exchange(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     //
     let exchange_acc = next_account_info(account_info_iter)?;
@@ -692,7 +772,7 @@ impl Processor {
   }
 
   //
-  fn process_exchange_saber_mercurial_usdc_3pool(accounts: &[AccountInfo], exchange_ins: &ExchangeStableInstruction, index: u8) -> ProgramResult {
+  fn process_exchange_saber_mercurial_3pool(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction, index: u8) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     //
     let exchange_acc = next_account_info(account_info_iter)?;
@@ -731,24 +811,10 @@ impl Processor {
       exchange_acc_state.exchange_out = expected_profit_base / 2 - 100;
     }
     //
-    let mut threshold = threshold_base;
-    let mut expected_profit = expected_profit_base;
-    if exchange_acc_state.input_amount <= normal_input_amount / 2 {
-      threshold = threshold / 2;
-      expected_profit = expected_profit / 2;
-    } else if exchange_acc_state.input_amount <= normal_input_amount {
-      //threshold = 1500000;
-      //expected_profit = 12500000;
-    } else if exchange_acc_state.input_amount <= normal_input_amount * 2 {
-      threshold = threshold * 2;
-      expected_profit = expected_profit * 2;
-    } else if exchange_acc_state.input_amount <= normal_input_amount * 4 {
-      threshold = threshold * 4;
-      expected_profit = expected_profit * 4;
-    } else {
-      threshold = threshold * 6;
-      expected_profit = expected_profit * 6;     
-    }
+    let mut multiple = exchange_acc_state.input_amount * 10 / normal_input_amount;
+    let threshold = threshold_base * multiple / 10;
+    let expected_profit = expected_profit_base * multiple / 10;
+
     //
     if exchange_acc_state.exchange_out >= threshold {
       let mut usdc_balance_before = 0;
@@ -765,18 +831,9 @@ impl Processor {
 
         // saber: buy usdc -> ust, mercurial: sell ust -> usdc
         //
-        let mut usdc_amount_in = normal_input_amount;
-        if exchange_acc_state.exchange_out >= expected_profit * 6 {
-          usdc_amount_in = usdc_amount_in * 6;
-        } else if exchange_acc_state.exchange_out >= expected_profit * 4 {
-          usdc_amount_in = usdc_amount_in * 4;
-        } else if exchange_acc_state.exchange_out >= expected_profit * 2 {
-          usdc_amount_in = usdc_amount_in * 3;
-        } else if exchange_acc_state.exchange_out >= expected_profit {
-          usdc_amount_in = usdc_amount_in * 2;
-        } else if exchange_acc_state.exchange_out < expected_profit / 2 {
-          usdc_amount_in = usdc_amount_in / 2;
-        }
+        let multiple = exchange_acc_state.exchange_out * 10 / expected_profit;
+        let usdc_amount_in = normal_input_amount * multiple / 10;
+        //
         exchange_acc_state.input_amount = usdc_amount_in;
         msg!("saber swap, amount in: {}", usdc_amount_in);
         Self::saber_swap(
@@ -843,7 +900,7 @@ impl Processor {
     Ok(())
   }
 
-  fn process_exchange_mercurial_saber_usdc_3pool(accounts: &[AccountInfo], exchange_ins: &ExchangeStableInstruction, index: u8) -> ProgramResult {
+  fn process_exchange_mercurial_saber_3pool(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction, index: u8) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     //
     let exchange_acc = next_account_info(account_info_iter)?;
@@ -882,24 +939,11 @@ impl Processor {
       exchange_acc_state.exchange_out = expected_profit_base / 2 - 100;
     }
     //
-    let mut threshold = threshold_base;
-    let mut expected_profit = expected_profit_base;
-    if exchange_acc_state.input_amount <= normal_input_amount / 2 {
-      threshold = threshold / 2;
-      expected_profit = expected_profit / 2;
-    } else if exchange_acc_state.input_amount <= normal_input_amount {
-      //threshold = 1500000;
-      //expected_profit = 12500000;
-    } else if exchange_acc_state.input_amount <= normal_input_amount * 2 {
-      threshold = threshold * 2;
-      expected_profit = expected_profit * 2;
-    } else if exchange_acc_state.input_amount <= normal_input_amount * 4 {
-      threshold = threshold * 4;
-      expected_profit = expected_profit * 4;
-    } else {
-      threshold = threshold * 6;
-      expected_profit = expected_profit * 6;     
-    }
+    let mut multiple = exchange_acc_state.input_amount * 10 / normal_input_amount;
+    let threshold = threshold_base * multiple / 10;
+    let expected_profit = expected_profit_base * multiple / 10;
+
+    //
     if exchange_acc_state.exchange_out >= threshold {
       let mut usdc_balance_before = 0;
       let mut usdc_balance_after = 0;
@@ -913,19 +957,9 @@ impl Processor {
         let ust_acc_balance_before = ust_acc_info_before.amount;
         msg!("usdc balance before: {}", usdc_acc_balance_before);
 
-        // mercurial: buy usdc -> ust, saber: sell ust -> usdc
-        let mut usdc_amount_in = normal_input_amount;
-        if exchange_acc_state.exchange_out >= expected_profit * 6 {
-          usdc_amount_in = usdc_amount_in * 6;
-        } else if exchange_acc_state.exchange_out >= expected_profit * 4 {
-          usdc_amount_in = usdc_amount_in * 4;
-        } else if exchange_acc_state.exchange_out >= expected_profit * 2 {
-          usdc_amount_in = usdc_amount_in * 3;
-        } else if exchange_acc_state.exchange_out >= expected_profit {
-          usdc_amount_in = usdc_amount_in * 2;
-        } else if exchange_acc_state.exchange_out < expected_profit / 2 {
-          usdc_amount_in = usdc_amount_in / 2;
-        }
+        let multiple = exchange_acc_state.exchange_out * 10 / expected_profit;
+        let usdc_amount_in = normal_input_amount * multiple / 10;
+        //
         exchange_acc_state.input_amount = usdc_amount_in;
         msg!("mercurial swap, amount in: {}", usdc_amount_in);
         Self::mercurial_swap_3pool(
@@ -992,7 +1026,7 @@ impl Processor {
   }
 
   //
-  fn process_exchange_saber_mercurial_usdc_4pool(accounts: &[AccountInfo], exchange_ins: &ExchangeStableInstruction, index: u8) -> ProgramResult {
+  fn process_exchange_saber_mercurial_4pool(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction, index: u8) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     //
     let exchange_acc = next_account_info(account_info_iter)?;
@@ -1032,24 +1066,10 @@ impl Processor {
       exchange_acc_state.exchange_out = expected_profit_base / 2 - 100;
     }
     //
-    let mut threshold = threshold_base;
-    let mut expected_profit = expected_profit_base;
-    if exchange_acc_state.input_amount <= normal_input_amount / 2 {
-      threshold = threshold / 2;
-      expected_profit = expected_profit / 2;
-    } else if exchange_acc_state.input_amount <= normal_input_amount {
-      //threshold = 1500000;
-      //expected_profit = 12500000;
-    } else if exchange_acc_state.input_amount <= normal_input_amount * 2 {
-      threshold = threshold * 2;
-      expected_profit = expected_profit * 2;
-    } else if exchange_acc_state.input_amount <= normal_input_amount * 4 {
-      threshold = threshold * 4;
-      expected_profit = expected_profit * 4;
-    } else {
-      threshold = threshold * 6;
-      expected_profit = expected_profit * 6;     
-    }
+    let mut multiple = exchange_acc_state.input_amount * 10 / normal_input_amount;
+    let threshold = threshold_base * multiple / 10;
+    let expected_profit = expected_profit_base * multiple / 10;
+
     //
     if exchange_acc_state.exchange_out >= threshold {
       let mut usdc_balance_before = 0;
@@ -1066,18 +1086,9 @@ impl Processor {
 
         // saber: buy usdc -> ust, mercurial: sell ust -> usdc
         //
-        let mut usdc_amount_in = normal_input_amount;
-        if exchange_acc_state.exchange_out >= expected_profit * 6 {
-          usdc_amount_in = usdc_amount_in * 6;
-        } else if exchange_acc_state.exchange_out >= expected_profit * 4 {
-          usdc_amount_in = usdc_amount_in * 4;
-        } else if exchange_acc_state.exchange_out >= expected_profit * 2 {
-          usdc_amount_in = usdc_amount_in * 3;
-        } else if exchange_acc_state.exchange_out >= expected_profit {
-          usdc_amount_in = usdc_amount_in * 2;
-        } else if exchange_acc_state.exchange_out < expected_profit / 2 {
-          usdc_amount_in = usdc_amount_in / 2;
-        }
+        let multiple = exchange_acc_state.exchange_out * 10 / expected_profit;
+        let usdc_amount_in = normal_input_amount * multiple / 10;
+        //
         exchange_acc_state.input_amount = usdc_amount_in;
         msg!("saber swap, amount in: {}", usdc_amount_in);
         Self::saber_swap(
@@ -1145,7 +1156,7 @@ impl Processor {
     Ok(())
   }
 
-  fn process_exchange_mercurial_saber_usdc_4pool(accounts: &[AccountInfo], exchange_ins: &ExchangeStableInstruction, index: u8) -> ProgramResult {
+  fn process_exchange_mercurial_saber_4pool(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction, index: u8) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     //
     let exchange_acc = next_account_info(account_info_iter)?;
@@ -1185,24 +1196,10 @@ impl Processor {
       exchange_acc_state.exchange_out = expected_profit_base / 2 - 100;
     }
     //
-    let mut threshold = threshold_base;
-    let mut expected_profit = expected_profit_base;
-    if exchange_acc_state.input_amount <= normal_input_amount / 2 {
-      threshold = threshold / 2;
-      expected_profit = expected_profit / 2;
-    } else if exchange_acc_state.input_amount <= normal_input_amount {
-      //threshold = 1500000;
-      //expected_profit = 12500000;
-    } else if exchange_acc_state.input_amount <= normal_input_amount * 2 {
-      threshold = threshold * 2;
-      expected_profit = expected_profit * 2;
-    } else if exchange_acc_state.input_amount <= normal_input_amount * 4 {
-      threshold = threshold * 4;
-      expected_profit = expected_profit * 4;
-    } else {
-      threshold = threshold * 6;
-      expected_profit = expected_profit * 6;     
-    }
+    let mut multiple = exchange_acc_state.input_amount * 10 / normal_input_amount;
+    let threshold = threshold_base * multiple / 10;
+    let expected_profit = expected_profit_base * multiple / 10;
+
     if exchange_acc_state.exchange_out >= threshold {
       let mut usdc_balance_before = 0;
       let mut usdc_balance_after = 0;
@@ -1217,18 +1214,9 @@ impl Processor {
         msg!("usdc balance before: {}", usdc_acc_balance_before);
 
         // mercurial: buy usdc -> ust, saber: sell ust -> usdc
-        let mut usdc_amount_in = normal_input_amount;
-        if exchange_acc_state.exchange_out >= expected_profit * 6 {
-          usdc_amount_in = usdc_amount_in * 6;
-        } else if exchange_acc_state.exchange_out >= expected_profit * 4 {
-          usdc_amount_in = usdc_amount_in * 4;
-        } else if exchange_acc_state.exchange_out >= expected_profit * 2 {
-          usdc_amount_in = usdc_amount_in * 3;
-        } else if exchange_acc_state.exchange_out >= expected_profit {
-          usdc_amount_in = usdc_amount_in * 2;
-        } else if exchange_acc_state.exchange_out < expected_profit / 2 {
-          usdc_amount_in = usdc_amount_in / 2;
-        }
+        let multiple = exchange_acc_state.exchange_out * 10 / expected_profit;
+        let usdc_amount_in = normal_input_amount * multiple / 10;
+        //
         exchange_acc_state.input_amount = usdc_amount_in;
         msg!("mercurial swap, amount in: {}", usdc_amount_in);
         Self::mercurial_swap_4pool(
@@ -1296,7 +1284,7 @@ impl Processor {
   }
 
       //
-  fn process_exchange_saber_mercurial_usdc_2pool(accounts: &[AccountInfo], exchange_ins: &ExchangeStableInstruction, index: u8) -> ProgramResult {
+  fn process_exchange_saber_mercurial_2pool(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction, index: u8) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     //
     let exchange_acc = next_account_info(account_info_iter)?;
@@ -1334,24 +1322,11 @@ impl Processor {
       exchange_acc_state.exchange_out = expected_profit_base / 2 - 100;
     }
     //
-    let mut threshold = threshold_base;
-    let mut expected_profit = expected_profit_base;
-    if exchange_acc_state.input_amount <= normal_input_amount / 2 {
-      threshold = threshold / 2;
-      expected_profit = expected_profit / 2;
-    } else if exchange_acc_state.input_amount <= normal_input_amount {
-      //threshold = 1500000;
-      //expected_profit = 12500000;
-    } else if exchange_acc_state.input_amount <= normal_input_amount * 2 {
-      threshold = threshold * 2;
-      expected_profit = expected_profit * 2;
-    } else if exchange_acc_state.input_amount <= normal_input_amount * 4 {
-      threshold = threshold * 4;
-      expected_profit = expected_profit * 4;
-    } else {
-      threshold = threshold * 6;
-      expected_profit = expected_profit * 6;     
-    }
+    //
+    let mut multiple = exchange_acc_state.input_amount * 10 / normal_input_amount;
+    let threshold = threshold_base * multiple / 10;
+    let expected_profit = expected_profit_base * multiple / 10;
+
     //
     if exchange_acc_state.exchange_out >= threshold {
       let mut usdc_balance_before = 0;
@@ -1368,18 +1343,9 @@ impl Processor {
 
         // saber: buy usdc -> ust, mercurial: sell ust -> usdc
         //
-        let mut usdc_amount_in = normal_input_amount;
-        if exchange_acc_state.exchange_out >= expected_profit * 6 {
-          usdc_amount_in = usdc_amount_in * 6;
-        } else if exchange_acc_state.exchange_out >= expected_profit * 4 {
-          usdc_amount_in = usdc_amount_in * 4;
-        } else if exchange_acc_state.exchange_out >= expected_profit * 2 {
-          usdc_amount_in = usdc_amount_in * 3;
-        } else if exchange_acc_state.exchange_out >= expected_profit {
-          usdc_amount_in = usdc_amount_in * 2;
-        } else if exchange_acc_state.exchange_out < expected_profit / 2 {
-          usdc_amount_in = usdc_amount_in / 2;
-        }
+        let multiple = exchange_acc_state.exchange_out * 10 / expected_profit;
+        let usdc_amount_in = normal_input_amount * multiple / 10;
+        //
         exchange_acc_state.input_amount = usdc_amount_in;
         msg!("saber swap, amount in: {}", usdc_amount_in);
         Self::saber_swap(
@@ -1445,7 +1411,7 @@ impl Processor {
     Ok(())
   }
 
-  fn process_exchange_mercurial_saber_usdc_2pool(accounts: &[AccountInfo], exchange_ins: &ExchangeStableInstruction, index: u8) -> ProgramResult {
+  fn process_exchange_mercurial_saber_2pool(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction, index: u8) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     //
     let exchange_acc = next_account_info(account_info_iter)?;
@@ -1483,24 +1449,10 @@ impl Processor {
       exchange_acc_state.exchange_out = expected_profit_base / 2 - 100;
     }
     //
-    let mut threshold = threshold_base;
-    let mut expected_profit = expected_profit_base;
-    if exchange_acc_state.input_amount <= normal_input_amount / 2 {
-      threshold = threshold / 2;
-      expected_profit = expected_profit / 2;
-    } else if exchange_acc_state.input_amount <= normal_input_amount {
-      //threshold = 1500000;
-      //expected_profit = 12500000;
-    } else if exchange_acc_state.input_amount <= normal_input_amount * 2 {
-      threshold = threshold * 2;
-      expected_profit = expected_profit * 2;
-    } else if exchange_acc_state.input_amount <= normal_input_amount * 4 {
-      threshold = threshold * 4;
-      expected_profit = expected_profit * 4;
-    } else {
-      threshold = threshold * 6;
-      expected_profit = expected_profit * 6;     
-    }
+    let mut multiple = exchange_acc_state.input_amount * 10 / normal_input_amount;
+    let threshold = threshold_base * multiple / 10;
+    let expected_profit = expected_profit_base * multiple / 10;
+
     if exchange_acc_state.exchange_out >= threshold {
       let mut usdc_balance_before = 0;
       let mut usdc_balance_after = 0;
@@ -1515,18 +1467,9 @@ impl Processor {
         msg!("usdc balance before: {}", usdc_acc_balance_before);
 
         // mercurial: buy usdc -> ust, saber: sell ust -> usdc
-        let mut usdc_amount_in = normal_input_amount;
-        if exchange_acc_state.exchange_out >= expected_profit * 6 {
-          usdc_amount_in = usdc_amount_in * 6;
-        } else if exchange_acc_state.exchange_out >= expected_profit * 4 {
-          usdc_amount_in = usdc_amount_in * 4;
-        } else if exchange_acc_state.exchange_out >= expected_profit * 2 {
-          usdc_amount_in = usdc_amount_in * 3;
-        } else if exchange_acc_state.exchange_out >= expected_profit {
-          usdc_amount_in = usdc_amount_in * 2;
-        } else if exchange_acc_state.exchange_out < expected_profit / 2 {
-          usdc_amount_in = usdc_amount_in / 2;
-        }
+        let multiple = exchange_acc_state.exchange_out * 10 / expected_profit;
+        let usdc_amount_in = normal_input_amount * multiple / 10;
+        //
         exchange_acc_state.input_amount = usdc_amount_in;
         msg!("mercurial swap, amount in: {}", usdc_amount_in);
         Self::mercurial_swap_2pool(
@@ -1654,7 +1597,7 @@ impl Processor {
     }
   }
 
-  fn process_exchange_saber_whirl_usdc_ust(accounts: &[AccountInfo], exchange_ins: &ExchangeStableInstruction) -> ProgramResult {
+  fn process_exchange_saber_whirl(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction, index: u8) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     //
     let exchange_acc = next_account_info(account_info_iter)?;
@@ -1803,7 +1746,7 @@ impl Processor {
     Ok(())
   }
 
-  fn process_exchange_whirl_saber_usdc_ust(accounts: &[AccountInfo], exchange_ins: &ExchangeStableInstruction) -> ProgramResult {
+  fn process_exchange_whirl_saber(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction, index: u8) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     //
     let exchange_acc = next_account_info(account_info_iter)?;
@@ -1951,6 +1894,38 @@ impl Processor {
     //
     Ok(())
   }    
+
+  fn process_exchange_saber_crema(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction, index: u8) -> ProgramResult {
+    Ok(())
+  }
+
+  fn process_exchange_crema_saber(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction, index: u8) -> ProgramResult {
+    Ok(())
+  }
+
+  fn process_exchange_orca_serum(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction, index: u8) -> ProgramResult {
+    Ok(())
+  }
+
+  fn process_exchange_serum_orca(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction, index: u8) -> ProgramResult {
+    Ok(())
+  }
+
+  fn process_exchange_orca_raydium(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction, index: u8) -> ProgramResult {
+    Ok(())
+  }
+
+  fn process_exchange_raydium_orca(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction, index: u8) -> ProgramResult {
+    Ok(())
+  }
+
+  fn process_exchange_orca_whirl(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction, index: u8) -> ProgramResult {
+    Ok(())
+  }
+
+  fn process_exchange_whirl_orca(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction, index: u8) -> ProgramResult {
+    Ok(())
+  }
 
   // orca swap
   fn orca_swap<'a>(
