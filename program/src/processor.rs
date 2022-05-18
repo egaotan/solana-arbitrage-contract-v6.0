@@ -31,9 +31,9 @@ use crate::{
 
 use std::{num::NonZeroU64};
 
-const normal_input_amount_all: [u64;5] = [2500000000, 100000000, 2500000000, 2500000000, 2500000000];
-const threshold_base_all: [u64;5] = [20000000, 20000, 2500, 2500, 500000];
-const expected_profit_base_all: [u64;5] = [80000000, 100000, 50000, 50000, 2500000];
+const normal_input_amount_all: [u64;8] = [2500000000, 100000000, 2500000000, 2500000000, 2500000000, 2500000000, 2500000000, 2500000000];
+const threshold_base_all: [u64;8] = [20000000, 20000, 5000, 5000, 500000, 500000, 500000, 500000];
+const expected_profit_base_all: [u64;8] = [80000000, 100000, 100000, 100000, 2500000, 500000, 500000, 500000];
 
 pub struct Processor;
 
@@ -2499,8 +2499,8 @@ impl Processor {
     ];
 
     let accounts = vec![
-      AccountMeta::new(*spl_token_program.key, false),
-      AccountMeta::new(*user_owner_acc.key, true),
+      AccountMeta::new_readonly(*spl_token_program.key, false),
+      AccountMeta::new_readonly(*user_owner_acc.key, true),
       AccountMeta::new(*market_acc.key, false),
       AccountMeta::new(*user_a_acc.key, false),
       AccountMeta::new(*vault_a_acc.key, false),
@@ -2509,7 +2509,7 @@ impl Processor {
       AccountMeta::new(*vault_tick0_acc.key, false),
       AccountMeta::new(*vault_tick1_acc.key, false),
       AccountMeta::new(*vault_tick2_acc.key, false),
-      AccountMeta::new(*oracle.key, false),
+      AccountMeta::new_readonly(*oracle.key, false),
     ];
 
     let mut data: [u8;35] = [0;35];
