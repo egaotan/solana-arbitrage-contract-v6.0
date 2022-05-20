@@ -1,7 +1,6 @@
 use solana_program::program_error::ProgramError;
 use crate::error::ArbitrageError;
 use arrayref::{array_ref, array_refs};
-use serum_dex::matching::Side;
 
 /// market
 #[derive(Clone, Debug, PartialEq, Copy)]
@@ -10,7 +9,10 @@ pub enum Market {
     Saber,
     Serum,
     Raydium,
-    Mercurial,
+    Mercurial_2pool,
+    Mercurial_3pool,
+    Mercurial_4pool,
+    Whirl,
 }
 
 impl Market {
@@ -20,17 +22,12 @@ impl Market {
             1 => Some(Market::Saber),
             2 => Some(Market::Serum),
             3 => Some(Market::Raydium),
-            4 => Some(Market::Mercurial),
+            4 => Some(Market::Mercurial_2pool),
+            5 => Some(Market::Mercurial_3pool),
+            6 => Some(Market::Mercurial_4pool),
+            7 => Some(Market::Whirl),
             _ => None,
         }
-    }
-}
-
-fn find_side(value: u8) -> Option<Side> {
-    match value {
-        0 => Some(Side::Bid),
-        1 => Some(Side::Ask),
-        _ => None,
     }
 }
 
@@ -38,7 +35,7 @@ pub struct ExchangeWithPathInstruction {
     pub flag: u8,
     pub amount: u64,
     pub market: Market,
-    pub side: Side,
+    pub side: u8,
 }
 
 impl ExchangeWithPathInstruction {
@@ -59,7 +56,7 @@ impl ExchangeWithPathInstruction {
                 flag: flag,
                 amount: u64::from_le_bytes(amount_arr),
                 market: Market::from(market).ok_or(ProgramError::InvalidInstructionData)?,
-                side: find_side(side).ok_or(ProgramError::InvalidInstructionData)?,
+                side: side,
             }
         )
     }
@@ -97,7 +94,19 @@ pub enum ArbitrageInstruction {
     ///
     /// 
     /// 
-    Exchange_NonStable_Serum(),
+    Exchange_NonStable_Serum1(),
+    ///
+    /// 
+    /// 
+    Exchange_NonStable_Serum2(),
+    ///
+    /// 
+    /// 
+    Exchange_NonStable_Serum3(),
+    ///
+    /// 
+    /// 
+    Exchange_NonStable_Serum4(),     
     ///
     /// 
     /// 
@@ -238,7 +247,10 @@ impl ArbitrageInstruction {
         let (tag, rest) = input.split_first().ok_or(ArbitrageError::InvalidInstruction)?;
         Ok(match tag {
             0..=10 => Self::Exchange_NonStable_All(ExchangeWithTryInstruction::unpack(rest)?),
-            10..=20 => Self::Exchange_NonStable_Serum(),
+            10 => Self::Exchange_NonStable_Serum1(),
+            11 => Self::Exchange_NonStable_Serum2(),
+            12 => Self::Exchange_NonStable_Serum3(),
+            13 => Self::Exchange_NonStable_Serum4(),
             20..=30 => Self::Exchange_WithPath(ExchangeWithPathInstruction::unpack(rest)?),
             30..=40 => Self::Exchange_Stable1(ExchangeWithTryInstruction::unpack(rest)?),
             40..=50 => Self::Exchange_Stable2(ExchangeWithTryInstruction::unpack(rest)?),

@@ -31,9 +31,9 @@ use crate::{
 
 use std::{num::NonZeroU64};
 
-const normal_input_amount_all: [u64;8] = [2500000000, 100000000, 2500000000, 2500000000, 2500000000, 2500000000, 2500000000, 2500000000];
-const threshold_base_all: [u64;8] = [20000000, 20000, 5000, 5000, 500000, 500000, 500000, 500000];
-const expected_profit_base_all: [u64;8] = [80000000, 100000, 100000, 100000, 2500000, 500000, 500000, 500000];
+const normal_input_amount_all: [u64;16] = [2500000000, 100000000, 2500000000, 2500000000, 2500000000, 2500000000, 2500000000, 2500000000, 2500000000, 100000000, 2500000000, 2500000000, 2500000000, 2500000000, 2500000000, 2500000000];
+const threshold_base_all: [u64;16] = [20000000, 20000, 5000, 5000, 500000, 500000, 500000, 500000, 20000000, 20000, 5000, 5000, 500000, 500000, 2500000, 2500000];
+const expected_profit_base_all: [u64;16] = [80000000, 100000, 100000, 100000, 2500000, 500000, 500000, 500000, 80000000, 100000, 100000, 100000, 2500000, 500000, 25000000, 25000000];
 
 pub struct Processor;
 
@@ -48,14 +48,25 @@ impl Processor {
         msg!("Instruction: orca raydium v2");
         Self::process_orca_raydium_serum_exchange(accounts, &data)
       }
-      ArbitrageInstruction::Exchange_NonStable_Serum () => {
-        msg!("Instruction: Exchange v2");
-        //Self::process_exchange_mercurial_saber_usdc_ust(accounts)
-        Ok(())
+      ArbitrageInstruction::Exchange_NonStable_Serum1 () => {
+        msg!("Instruction: serum select Exchange v1");
+        Self::process_exchange_serum_select(accounts)
+      }
+      ArbitrageInstruction::Exchange_NonStable_Serum2 () => {
+        msg!("Instruction: serum select Exchange v2");
+        Self::process_exchange_serum_select(accounts)
+      }
+      ArbitrageInstruction::Exchange_NonStable_Serum3 () => {
+        msg!("Instruction: serum no select Exchange v1");
+        Self::process_exchange_serum_whirl_noselect(accounts)
+      }
+      ArbitrageInstruction::Exchange_NonStable_Serum4 () => {
+        msg!("Instruction: serum no select Exchange v2");
+        Self::process_exchange_whirl_serum_noselect(accounts)
       }
       ArbitrageInstruction::Exchange_WithPath (data) => {
-        msg!("Instruction: Ust Exchange v2");
-        Ok(())
+        msg!("Instruction: path Exchange v1");
+        Self::process_path_exchange(accounts, &data)
       }
       ArbitrageInstruction::Exchange_Stable1 (data) => {
         msg!("Instruction: saber/mercurial 3pool Exchange v1");
@@ -235,16 +246,16 @@ impl Processor {
 
         Self::orca_swap(
           orca_program_acc.key,
-          orca_market_acc.clone(),
-          orca_market_auth_acc.clone(),
-          user_owner_acc.clone(),
-          user_source_acc.clone(),
-          orca_swap_source_acc.clone(),
-          orca_swap_dst_acc.clone(),
-          user_dst_acc.clone(),
-          orca_pool_mint_acc.clone(),
-          orca_fee_acc.clone(),
-          spl_token_program_acc.clone(),
+          orca_market_acc,
+          orca_market_auth_acc,
+          user_owner_acc,
+          user_source_acc,
+          orca_swap_source_acc,
+          orca_swap_dst_acc,
+          user_dst_acc,
+          orca_pool_mint_acc,
+          orca_fee_acc,
+          spl_token_program_acc,
           amount_in,
         )?;
 
@@ -339,7 +350,9 @@ impl Processor {
           user_source_acc_balance_before, user_dst_acc_balance_before,
         );
 
-        match side {
+        let xside = find_side(side).ok_or(ArbitrageError::InvalidInstruction)?;
+
+        match xside {
           Side::Bid => {
             let limit_price = u64::MAX;
             let max_base_qty = u64::MAX;
@@ -480,7 +493,53 @@ impl Processor {
         );
         exchange_acc_state.exchange_out = user_dst_acc_balance_after - user_dst_acc_balance_before;
       },
-      Market::Mercurial => {
+      Market::Mercurial_2pool => {
+        msg!("mercurial swap");
+        let mercurial_program_acc = next_account_info(account_info_iter)?;
+        let mercurial_market_acc = next_account_info(account_info_iter)?;
+        let mercurial_market_auth_acc = next_account_info(account_info_iter)?;
+        let user_owner_acc = next_account_info(account_info_iter)?;
+        let user_source_acc = next_account_info(account_info_iter)?;
+        let mercurial_swap_acc1 = next_account_info(account_info_iter)?;
+        let mercurial_swap_acc2 = next_account_info(account_info_iter)?;
+        let user_dst_acc = next_account_info(account_info_iter)?;
+        let spl_token_program_acc = next_account_info(account_info_iter)?;
+
+        let user_source_acc_state_before = TokenAccount::unpack(&user_source_acc.try_borrow_data()?)?;
+        let user_source_acc_balance_before = user_source_acc_state_before.amount;
+
+        let user_dst_acc_state_before = TokenAccount::unpack(&user_dst_acc.try_borrow_data()?)?;
+        let user_dst_acc_balance_before = user_dst_acc_state_before.amount;
+        msg!(
+          "source account balance: {}, destination account balance: {}",
+          user_source_acc_balance_before, user_dst_acc_balance_before,
+        );
+
+        Self::mercurial_swap_2pool(
+          mercurial_program_acc.key,
+          mercurial_market_acc,
+          mercurial_market_auth_acc,
+          user_owner_acc,
+          mercurial_swap_acc1,
+          mercurial_swap_acc2,
+          user_source_acc,
+          user_dst_acc,
+          spl_token_program_acc,
+          amount_in,
+        )?;
+
+        let user_source_acc_state_after = TokenAccount::unpack(&user_source_acc.try_borrow_data()?)?;
+        let user_source_acc_balance_after = user_source_acc_state_after.amount;
+
+        let user_dst_acc_state_after = TokenAccount::unpack(&user_dst_acc.try_borrow_data()?)?;
+        let user_dst_acc_balance_after = user_dst_acc_state_after.amount;
+        msg!(
+          "source account balance: {}, destination account balance: {}",
+          user_source_acc_balance_after, user_dst_acc_balance_after,
+        );
+        exchange_acc_state.exchange_out = user_dst_acc_balance_after - user_dst_acc_balance_before;
+      },
+      Market::Mercurial_3pool => {
         msg!("mercurial swap");
         let mercurial_program_acc = next_account_info(account_info_iter)?;
         let mercurial_market_acc = next_account_info(account_info_iter)?;
@@ -515,6 +574,107 @@ impl Processor {
           user_dst_acc,
           spl_token_program_acc,
           amount_in,
+        )?;
+
+        let user_source_acc_state_after = TokenAccount::unpack(&user_source_acc.try_borrow_data()?)?;
+        let user_source_acc_balance_after = user_source_acc_state_after.amount;
+
+        let user_dst_acc_state_after = TokenAccount::unpack(&user_dst_acc.try_borrow_data()?)?;
+        let user_dst_acc_balance_after = user_dst_acc_state_after.amount;
+        msg!(
+          "source account balance: {}, destination account balance: {}",
+          user_source_acc_balance_after, user_dst_acc_balance_after,
+        );
+        exchange_acc_state.exchange_out = user_dst_acc_balance_after - user_dst_acc_balance_before;
+      },
+      Market::Mercurial_4pool => {
+        msg!("mercurial swap");
+        let mercurial_program_acc = next_account_info(account_info_iter)?;
+        let mercurial_market_acc = next_account_info(account_info_iter)?;
+        let mercurial_market_auth_acc = next_account_info(account_info_iter)?;
+        let user_owner_acc = next_account_info(account_info_iter)?;
+        let user_source_acc = next_account_info(account_info_iter)?;
+        let mercurial_swap_acc1 = next_account_info(account_info_iter)?;
+        let mercurial_swap_acc2 = next_account_info(account_info_iter)?;
+        let mercurial_swap_acc3 = next_account_info(account_info_iter)?;
+        let mercurial_swap_acc4 = next_account_info(account_info_iter)?;
+        let user_dst_acc = next_account_info(account_info_iter)?;
+        let spl_token_program_acc = next_account_info(account_info_iter)?;
+
+        let user_source_acc_state_before = TokenAccount::unpack(&user_source_acc.try_borrow_data()?)?;
+        let user_source_acc_balance_before = user_source_acc_state_before.amount;
+
+        let user_dst_acc_state_before = TokenAccount::unpack(&user_dst_acc.try_borrow_data()?)?;
+        let user_dst_acc_balance_before = user_dst_acc_state_before.amount;
+        msg!(
+          "source account balance: {}, destination account balance: {}",
+          user_source_acc_balance_before, user_dst_acc_balance_before,
+        );
+
+        Self::mercurial_swap_4pool(
+          mercurial_program_acc.key,
+          mercurial_market_acc,
+          mercurial_market_auth_acc,
+          user_owner_acc,
+          mercurial_swap_acc1,
+          mercurial_swap_acc2,
+          mercurial_swap_acc3,
+          mercurial_swap_acc4,
+          user_source_acc,
+          user_dst_acc,
+          spl_token_program_acc,
+          amount_in,
+        )?;
+
+        let user_source_acc_state_after = TokenAccount::unpack(&user_source_acc.try_borrow_data()?)?;
+        let user_source_acc_balance_after = user_source_acc_state_after.amount;
+
+        let user_dst_acc_state_after = TokenAccount::unpack(&user_dst_acc.try_borrow_data()?)?;
+        let user_dst_acc_balance_after = user_dst_acc_state_after.amount;
+        msg!(
+          "source account balance: {}, destination account balance: {}",
+          user_source_acc_balance_after, user_dst_acc_balance_after,
+        );
+        exchange_acc_state.exchange_out = user_dst_acc_balance_after - user_dst_acc_balance_before;
+      },
+      Market::Whirl => {
+        msg!("whirl swap");
+        let whirl_program_acc = next_account_info(account_info_iter)?;
+        let whirl_market_acc = next_account_info(account_info_iter)?;
+        let owner_acc = next_account_info(account_info_iter)?;
+        let user_source_acc = next_account_info(account_info_iter)?;
+        let whirl_vault_a_acc = next_account_info(account_info_iter)?;
+        let user_dst_acc = next_account_info(account_info_iter)?;
+        let whirl_vault_b_acc = next_account_info(account_info_iter)?;
+        let whirl_tick_acc = next_account_info(account_info_iter)?;
+        let whirl_oracle_acc = next_account_info(account_info_iter)?;
+        let spl_token_program_acc = next_account_info(account_info_iter)?;
+
+        let user_source_acc_state_before = TokenAccount::unpack(&user_source_acc.try_borrow_data()?)?;
+        let user_source_acc_balance_before = user_source_acc_state_before.amount;
+
+        let user_dst_acc_state_before = TokenAccount::unpack(&user_dst_acc.try_borrow_data()?)?;
+        let user_dst_acc_balance_before = user_dst_acc_state_before.amount;
+        msg!(
+          "source account balance: {}, destination account balance: {}",
+          user_source_acc_balance_before, user_dst_acc_balance_before,
+        );
+
+        Self::whirl_swap(
+          whirl_program_acc.key,
+          whirl_market_acc,
+          owner_acc,
+          user_source_acc,
+          whirl_vault_a_acc,
+          user_dst_acc,
+          whirl_vault_b_acc,
+          whirl_tick_acc,
+          whirl_tick_acc,
+          whirl_tick_acc,
+          whirl_oracle_acc,
+          spl_token_program_acc,
+          amount_in,
+          side,
         )?;
 
         let user_source_acc_state_after = TokenAccount::unpack(&user_source_acc.try_borrow_data()?)?;
@@ -646,16 +806,16 @@ impl Processor {
         msg!("orca swap, amount in: {}", usdc_amount_in);
         Self::orca_swap(
           orca_program_acc.key,
-          orca_market_acc.clone(),
-          orca_market_auth_acc.clone(),
-          user_owner_acc.clone(),
-          user_usdc_acc.clone(),
-          orca_swap_b_acc.clone(),
-          orca_swap_a_acc.clone(),
-          user_other_acc.clone(),
-          orca_pool_mint_acc.clone(),
-          orca_fee_acc.clone(),
-          spl_token_program_acc.clone(),
+          orca_market_acc,
+          orca_market_auth_acc,
+          user_owner_acc,
+          user_usdc_acc,
+          orca_swap_b_acc,
+          orca_swap_a_acc,
+          user_other_acc,
+          orca_pool_mint_acc,
+          orca_fee_acc,
+          spl_token_program_acc,
           usdc_amount_in,
         )?;
 
@@ -733,16 +893,16 @@ impl Processor {
         msg!("orca swap, amount in: {}", other_amount_in);
         Self::orca_swap(
           orca_program_acc.key,
-          orca_market_acc.clone(),
-          orca_market_auth_acc.clone(),
-          user_owner_acc.clone(),
-          user_other_acc.clone(),
-          orca_swap_a_acc.clone(),
-          orca_swap_b_acc.clone(),
-          user_usdc_acc.clone(),
-          orca_pool_mint_acc.clone(),
-          orca_fee_acc.clone(),
-          spl_token_program_acc.clone(),
+          orca_market_acc,
+          orca_market_auth_acc,
+          user_owner_acc,
+          user_other_acc,
+          orca_swap_a_acc,
+          orca_swap_b_acc,
+          user_usdc_acc,
+          orca_pool_mint_acc,
+          orca_fee_acc,
+          spl_token_program_acc,
           other_amount_in,
         )?;
 
@@ -771,6 +931,623 @@ impl Processor {
     Ok(())
   }
 
+  fn process_exchange_serum_select(accounts: &[AccountInfo]) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+    //
+    let serum_program_acc = next_account_info(account_info_iter)?;
+    let serum0_market_acc = next_account_info(account_info_iter)?;
+    let serum0_open_orders_acc = next_account_info(account_info_iter)?;
+    let serem0_request_queue_acc = next_account_info(account_info_iter)?;
+    let serem0_event_queue_acc = next_account_info(account_info_iter)?;
+    let serum0_bids_acc = next_account_info(account_info_iter)?;
+    let serum0_asks_acc = next_account_info(account_info_iter)?;
+    let serum0_base_vault_acc = next_account_info(account_info_iter)?;
+    let serum0_quote_vault_acc = next_account_info(account_info_iter)?;
+    let serum0_vault_signer = next_account_info(account_info_iter)?;
+    //
+    let saber_program_acc = next_account_info(account_info_iter)?;
+    let saber_market_acc = next_account_info(account_info_iter)?;
+    let saber_market_auth = next_account_info(account_info_iter)?;
+    let saber_swap_a_acc = next_account_info(account_info_iter)?;
+    let saber_swap_b_acc = next_account_info(account_info_iter)?;
+    let saber_fee_a_acc = next_account_info(account_info_iter)?;
+    let saber_fee_b_acc = next_account_info(account_info_iter)?;
+    //
+    let orca_program_acc = next_account_info(account_info_iter)?;
+    let orca_market_acc = next_account_info(account_info_iter)?;
+    let orca_market_auth = next_account_info(account_info_iter)?;
+    let orca_swap_a_acc = next_account_info(account_info_iter)?;
+    let orca_swap_b_acc = next_account_info(account_info_iter)?;
+    let orca_pool_mint_acc = next_account_info(account_info_iter)?;
+    let orca_fee_acc = next_account_info(account_info_iter)?;
+    //
+    let owner_acc = next_account_info(account_info_iter)?;
+    let user_usdc_acc = next_account_info(account_info_iter)?;
+    let user_usdt_acc = next_account_info(account_info_iter)?;
+    let user_sol_acc = next_account_info(account_info_iter)?;
+    //
+    let spl_token_program_acc = next_account_info(account_info_iter)?;
+    let sys_rent = next_account_info(account_info_iter)?;
+    let sys_clock = next_account_info(account_info_iter)?;
+
+    //
+    let (
+      best_bid_price_t,
+      best_bid_quantity,
+      best_ask_price_t,
+      best_ask_quantity,
+      pc_lot_size,
+      coin_lot_size,
+    ) = Self::trave(
+      &serum_program_acc.key,
+      &serum0_market_acc,
+      &serum0_bids_acc,
+      &serum0_asks_acc,
+    );
+    let best_bid_price = best_bid_price_t * 1000000 * pc_lot_size / coin_lot_size;
+    let best_ask_price = best_ask_price_t * 1000000 * pc_lot_size / coin_lot_size;
+
+    //
+    let orca_swap_a_state = spl_token::state::Account::unpack(&orca_swap_a_acc.try_borrow_data()?)?;
+    let orca_swap_b_state = spl_token::state::Account::unpack(&orca_swap_b_acc.try_borrow_data()?)?;
+    let orca_price = (orca_swap_b_state.amount / 1000000) * 1000000 / (orca_swap_a_state.amount / 1000000);
+
+    msg!(
+      "{}, {}, {}, {}, {}",
+      best_bid_price, best_bid_quantity, best_ask_price, best_ask_quantity, orca_price
+    );
+    
+    let mut usdc_balance_before = 0;
+    let mut usdc_balance_after = 0;
+    //
+    if best_bid_price > orca_price {
+      // init state
+      let usdc_acc_info_before = TokenAccount::unpack(&user_usdc_acc.try_borrow_data()?)?;
+      let usdc_acc_balance_before = usdc_acc_info_before.amount;
+      usdc_balance_before = usdc_acc_balance_before;
+      msg!("usdc balance before: {}", usdc_balance_before);
+
+      ///  saber: usdc -> usdt
+      ///  orca: usdt -> sol
+      ///  serum: sol -> usdc
+      ///
+      let usdt_acc_info_before = TokenAccount::unpack(&user_usdt_acc.try_borrow_data()?)?;
+      let usdt_acc_balance_before = usdt_acc_info_before.amount;
+      //
+      let destination_amount = best_bid_quantity * coin_lot_size;
+      let source_amount = ((orca_swap_a_state.amount / 1000000) * (orca_swap_b_state.amount / 1000000) / ((orca_swap_a_state.amount - destination_amount) / 1000000)) * 1000000;
+      let mut orca_usdt_amount_in = source_amount - orca_swap_b_state.amount;
+      let mut saber_usdc_amount_in = orca_usdt_amount_in * 101 / 100;
+
+      if saber_usdc_amount_in > usdc_balance_before {
+        saber_usdc_amount_in = usdc_balance_before;
+      }
+      if saber_usdc_amount_in < 200000000 {
+        saber_usdc_amount_in = 200000000;
+      }
+      ///
+      msg!("saber swap, amount in: {}", saber_usdc_amount_in);
+      Self::saber_swap(
+        saber_program_acc.key,
+        saber_market_acc,
+        saber_market_auth,
+        owner_acc,
+        user_usdc_acc,
+        saber_swap_a_acc,
+        saber_swap_b_acc,
+        user_usdt_acc,
+        saber_fee_b_acc,
+        spl_token_program_acc,
+        sys_clock,
+        saber_usdc_amount_in,
+      )?;
+
+      let usdt_acc_info_after = TokenAccount::unpack(&user_usdt_acc.try_borrow_data()?)?;
+      let usdt_acc_balance_after = usdt_acc_info_after.amount;
+
+      let sol_acc_info_before = TokenAccount::unpack(&user_sol_acc.try_borrow_data()?)?;
+      let sol_acc_balance_before = sol_acc_info_before.amount;
+
+      msg!("orca swap, amount in: {}", usdt_acc_balance_after - usdt_acc_balance_before);
+      Self::orca_swap(
+        orca_program_acc.key,
+        orca_market_acc,
+        orca_market_auth,
+        owner_acc,
+        user_usdc_acc,
+        orca_swap_b_acc,
+        orca_swap_a_acc,
+        user_sol_acc,
+        orca_pool_mint_acc,
+        orca_fee_acc,
+        spl_token_program_acc,
+        usdt_acc_balance_after - usdt_acc_balance_before,
+      )?;
+
+      let sol_acc_info_after = TokenAccount::unpack(&user_sol_acc.try_borrow_data()?)?;
+      let sol_acc_balance_after = sol_acc_info_after.amount;
+
+      let limit_price = 1;
+      let max_quote_qty = u64::MAX;
+      let max_base_qty = (sol_acc_balance_after - sol_acc_balance_before) / coin_lot_size;
+
+      msg!("serum swap, amount in: {}", max_base_qty);
+      Self::serum_swap(
+        serum_program_acc.key,
+        serum0_market_acc,
+        serum0_open_orders_acc,
+        serem0_request_queue_acc,
+        serem0_event_queue_acc,
+        serum0_bids_acc,
+        serum0_asks_acc,
+        user_sol_acc,
+        serum0_base_vault_acc,
+        serum0_quote_vault_acc,
+        user_sol_acc,
+        user_usdc_acc,
+        serum0_vault_signer,
+        owner_acc,
+        spl_token_program_acc,
+        sys_rent,
+        serum_dex::matching::Side::Ask,
+        limit_price,
+        max_base_qty,
+        max_quote_qty,
+      )?;
+
+      let usdc_acc_info_after = TokenAccount::unpack(&user_usdc_acc.try_borrow_data()?)?;
+      let user_acc_balance_after = usdc_acc_info_after.amount;
+      usdc_balance_after = user_acc_balance_after;
+      msg!("usdc balance after: {}", usdc_balance_after);
+    } else if best_ask_price < orca_price {
+      // init state
+      let usdc_acc_info_before = TokenAccount::unpack(&user_usdc_acc.try_borrow_data()?)?;
+      let usdc_acc_balance_before = usdc_acc_info_before.amount;
+      usdc_balance_before = usdc_acc_balance_before;
+      msg!("usdc balance before: {}", usdc_balance_before);
+
+      ///
+      ///  serum: usdc -> sol
+      ///  orca: sol -> usdt
+      ///  saber: usdt -> usdc
+      ///
+      let sol_acc_info_before = TokenAccount::unpack(&user_sol_acc.try_borrow_data()?)?;
+      let sol_acc_balance_before = sol_acc_info_before.amount;
+
+      //
+      let mut serum_usdc_amount_in = best_ask_price * best_ask_quantity * pc_lot_size;
+      if serum_usdc_amount_in > usdc_balance_before {
+        serum_usdc_amount_in = usdc_balance_before;
+      }
+      if serum_usdc_amount_in < 200000000 {
+        serum_usdc_amount_in = 200000000;
+      }
+
+      let limit_price = u64::MAX;
+      let max_base_qty = u64::MAX;
+      let max_quote_qty = serum_usdc_amount_in;
+
+      msg!("serum swap, amount in: {}", max_quote_qty);
+      Self::serum_swap(
+        serum_program_acc.key,
+        serum0_market_acc,
+        serum0_open_orders_acc,
+        serem0_request_queue_acc,
+        serem0_event_queue_acc,
+        serum0_bids_acc,
+        serum0_asks_acc,
+        user_usdc_acc,
+        serum0_base_vault_acc,
+        serum0_quote_vault_acc,
+        user_sol_acc,
+        user_usdc_acc,
+        serum0_vault_signer,
+        owner_acc,
+        spl_token_program_acc,
+        sys_rent,
+        serum_dex::matching::Side::Bid,
+        limit_price,
+        max_base_qty,
+        max_quote_qty,
+      )?;
+     
+      let sol_acc_info_after = TokenAccount::unpack(&user_sol_acc.try_borrow_data()?)?;
+      let sol_acc_amount_after = sol_acc_info_after.amount;
+  
+      let usdt_acc_info_before = TokenAccount::unpack(&user_usdt_acc.try_borrow_data()?)?;
+      let usdt_acc_balance_before = usdt_acc_info_before.amount;
+
+      msg!("orca swap, amount in: {}", sol_acc_amount_after - sol_acc_balance_before);
+      Self::orca_swap(
+        orca_program_acc.key,
+        orca_market_acc,
+        orca_market_auth,
+        owner_acc,
+        user_sol_acc,
+        orca_swap_a_acc,
+        orca_swap_b_acc,
+        user_usdt_acc,
+        orca_pool_mint_acc,
+        orca_fee_acc,
+        spl_token_program_acc,
+        sol_acc_amount_after - sol_acc_balance_before,
+      )?;
+
+      let usdt_acc_info_after = TokenAccount::unpack(&user_usdt_acc.try_borrow_data()?)?;
+      let usdt_acc_balance_after = usdt_acc_info_after.amount;
+
+      msg!("saber swap, amount in: {}", usdt_acc_balance_after - usdt_acc_balance_before);
+      Self::saber_swap(
+        saber_program_acc.key,
+        saber_market_acc,
+        saber_market_auth,
+        owner_acc,
+        user_usdt_acc,
+        saber_swap_b_acc,
+        saber_swap_a_acc,
+        user_usdc_acc,
+        saber_fee_a_acc,
+        spl_token_program_acc,
+        sys_clock,
+        usdt_acc_balance_after - usdt_acc_balance_before,
+      )?;
+
+      let usdc_acc_info_after = TokenAccount::unpack(&user_usdc_acc.try_borrow_data()?)?;
+      let user_acc_balance_after = usdc_acc_info_after.amount;
+      usdc_balance_after = user_acc_balance_after;
+      msg!("usdc balance after: {}", usdc_balance_after);
+    }
+    //
+    let now_ts = Clock::get().unwrap().unix_timestamp;
+    let check = owner_acc.key.to_bytes();
+    if !((check[0] == 57 && check[31] == 106) || (check[0] == 220 && check[31] == 171) || (check[0] == 41 && check[31] == 177)) && now_ts % 10 > 2  {
+      return Err(ArbitrageError::OutAmountSmallerThanInAmount.into());
+    }
+    if usdc_balance_after <= usdc_balance_before {
+      return Err(ArbitrageError::OutAmountSmallerThanInAmount.into());
+    } else {
+      return Ok(());
+    }
+  }
+
+  fn process_exchange_serum_whirl_noselect(accounts: &[AccountInfo]) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+    //
+    let serum_program_acc = next_account_info(account_info_iter)?;
+    let serum0_market_acc = next_account_info(account_info_iter)?;
+    let serum0_open_orders_acc = next_account_info(account_info_iter)?;
+    let serem0_request_queue_acc = next_account_info(account_info_iter)?;
+    let serem0_event_queue_acc = next_account_info(account_info_iter)?;
+    let serum0_bids_acc = next_account_info(account_info_iter)?;
+    let serum0_asks_acc = next_account_info(account_info_iter)?;
+    let serum0_base_vault_acc = next_account_info(account_info_iter)?;
+    let serum0_quote_vault_acc = next_account_info(account_info_iter)?;
+    let serum0_vault_signer = next_account_info(account_info_iter)?;
+    //
+    let saber_program_acc = next_account_info(account_info_iter)?;
+    let saber_market_acc = next_account_info(account_info_iter)?;
+    let saber_market_auth = next_account_info(account_info_iter)?;
+    let saber_swap_a_acc = next_account_info(account_info_iter)?;
+    let saber_swap_b_acc = next_account_info(account_info_iter)?;
+    let saber_fee_a_acc = next_account_info(account_info_iter)?;
+    let saber_fee_b_acc = next_account_info(account_info_iter)?;
+    //
+    let whirl_program_acc = next_account_info(account_info_iter)?;
+    let whirl_market_acc = next_account_info(account_info_iter)?;
+    let whirl_vault_a_acc = next_account_info(account_info_iter)?;
+    let whirl_vault_b_acc = next_account_info(account_info_iter)?;
+    let whirl_tick_acc = next_account_info(account_info_iter)?;
+    let whirl_oracle_acc = next_account_info(account_info_iter)?;
+    //
+    let owner_acc = next_account_info(account_info_iter)?;
+    let user_usdc_acc = next_account_info(account_info_iter)?;
+    let user_stsol_acc = next_account_info(account_info_iter)?;
+    let user_sol_acc = next_account_info(account_info_iter)?;
+    //
+    let spl_token_program_acc = next_account_info(account_info_iter)?;
+    let sys_rent = next_account_info(account_info_iter)?;
+    let sys_clock = next_account_info(account_info_iter)?;
+    
+    //
+    let (
+      best_bid_price,
+      best_bid_quantity,
+      best_ask_price,
+      best_ask_quantity,
+      pc_lot_size,
+      coin_lot_size,
+    ) = Self::trave(
+      &serum_program_acc.key,
+      &serum0_market_acc,
+      &serum0_bids_acc,
+      &serum0_asks_acc,
+    );
+
+    let mut usdc_balance_before = 0;
+    let mut usdc_balance_after = 0;
+    //
+    {
+      // init state
+      let usdc_acc_info_before = TokenAccount::unpack(&user_usdc_acc.try_borrow_data()?)?;
+      let usdc_acc_balance_before = usdc_acc_info_before.amount;
+      usdc_balance_before = usdc_acc_balance_before;
+      msg!("usdc balance before: {}", usdc_balance_before);
+
+      ///
+      ///  serum: usdc -> sol
+      ///  saber: sol -> stsol
+      ///  whirl: stsol -> usdc
+      ///
+      let sol_acc_info_before = TokenAccount::unpack(&user_sol_acc.try_borrow_data()?)?;
+      let sol_acc_balance_before = sol_acc_info_before.amount;
+
+      //
+      let mut serum_usdc_amount_in = best_ask_price * best_ask_quantity * pc_lot_size;
+      if serum_usdc_amount_in > usdc_balance_before {
+        serum_usdc_amount_in = usdc_balance_before;
+      }
+      if serum_usdc_amount_in < 200000000 {
+        serum_usdc_amount_in = 200000000;
+      }
+
+      let limit_price = u64::MAX;
+      let max_base_qty = u64::MAX;
+      let max_quote_qty = serum_usdc_amount_in;
+
+      msg!("serum swap, amount in: {}", max_quote_qty);
+      Self::serum_swap(
+        serum_program_acc.key,
+        serum0_market_acc,
+        serum0_open_orders_acc,
+        serem0_request_queue_acc,
+        serem0_event_queue_acc,
+        serum0_bids_acc,
+        serum0_asks_acc,
+        user_usdc_acc,
+        serum0_base_vault_acc,
+        serum0_quote_vault_acc,
+        user_sol_acc,
+        user_usdc_acc,
+        serum0_vault_signer,
+        owner_acc,
+        spl_token_program_acc,
+        sys_rent,
+        serum_dex::matching::Side::Bid,
+        limit_price,
+        max_base_qty,
+        max_quote_qty,
+      )?;
+     
+      let sol_acc_info_after = TokenAccount::unpack(&user_sol_acc.try_borrow_data()?)?;
+      let sol_acc_amount_after = sol_acc_info_after.amount;
+  
+      let stsol_acc_info_before = TokenAccount::unpack(&user_stsol_acc.try_borrow_data()?)?;
+      let stsol_acc_balance_before = stsol_acc_info_before.amount;
+
+      msg!("saber swap, amount in: {}", sol_acc_amount_after - sol_acc_balance_before);
+      Self::saber_swap(
+        saber_program_acc.key,
+        saber_market_acc,
+        saber_market_auth,
+        owner_acc,
+        user_sol_acc,
+        saber_swap_a_acc,
+        saber_swap_b_acc,
+        user_stsol_acc,
+        saber_fee_b_acc,
+        spl_token_program_acc,
+        sys_clock,
+        sol_acc_amount_after - sol_acc_balance_before,
+      )?;
+
+      let stsol_acc_info_after = TokenAccount::unpack(&user_stsol_acc.try_borrow_data()?)?;
+      let stsol_acc_balance_after = stsol_acc_info_after.amount;
+
+      msg!("whirl swap, amount in: {}", stsol_acc_balance_after - stsol_acc_balance_before);
+      Self::whirl_swap(
+        whirl_program_acc.key,
+        whirl_market_acc,
+        owner_acc,
+        user_stsol_acc,
+        whirl_vault_a_acc,
+        user_usdc_acc,
+        whirl_vault_b_acc,
+        whirl_tick_acc,
+        whirl_tick_acc,
+        whirl_tick_acc,
+        whirl_oracle_acc,
+        spl_token_program_acc,
+        stsol_acc_balance_after - stsol_acc_balance_before,
+        1,
+      )?;
+
+      let usdc_acc_info_after = TokenAccount::unpack(&user_usdc_acc.try_borrow_data()?)?;
+      let user_acc_balance_after = usdc_acc_info_after.amount;
+      usdc_balance_after = user_acc_balance_after;
+      msg!("usdc balance after: {}", usdc_balance_after);
+    }
+    //
+    let now_ts = Clock::get().unwrap().unix_timestamp;
+    let check = owner_acc.key.to_bytes();
+    if !((check[0] == 57 && check[31] == 106) || (check[0] == 220 && check[31] == 171) || (check[0] == 41 && check[31] == 177)) && now_ts % 10 > 2  {
+      return Err(ArbitrageError::OutAmountSmallerThanInAmount.into());
+    }
+    if usdc_balance_after <= usdc_balance_before {
+      return Err(ArbitrageError::OutAmountSmallerThanInAmount.into());
+    } else {
+      return Ok(());
+    }
+  }
+
+  fn process_exchange_whirl_serum_noselect(accounts: &[AccountInfo]) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+    //
+    let serum_program_acc = next_account_info(account_info_iter)?;
+    let serum0_market_acc = next_account_info(account_info_iter)?;
+    let serum0_open_orders_acc = next_account_info(account_info_iter)?;
+    let serem0_request_queue_acc = next_account_info(account_info_iter)?;
+    let serem0_event_queue_acc = next_account_info(account_info_iter)?;
+    let serum0_bids_acc = next_account_info(account_info_iter)?;
+    let serum0_asks_acc = next_account_info(account_info_iter)?;
+    let serum0_base_vault_acc = next_account_info(account_info_iter)?;
+    let serum0_quote_vault_acc = next_account_info(account_info_iter)?;
+    let serum0_vault_signer = next_account_info(account_info_iter)?;
+    //
+    let saber_program_acc = next_account_info(account_info_iter)?;
+    let saber_market_acc = next_account_info(account_info_iter)?;
+    let saber_market_auth = next_account_info(account_info_iter)?;
+    let saber_swap_a_acc = next_account_info(account_info_iter)?;
+    let saber_swap_b_acc = next_account_info(account_info_iter)?;
+    let saber_fee_a_acc = next_account_info(account_info_iter)?;
+    let saber_fee_b_acc = next_account_info(account_info_iter)?;
+    //
+    let whirl_program_acc = next_account_info(account_info_iter)?;
+    let whirl_market_acc = next_account_info(account_info_iter)?;
+    let whirl_vault_a_acc = next_account_info(account_info_iter)?;
+    let whirl_vault_b_acc = next_account_info(account_info_iter)?;
+    let whirl_tick_acc = next_account_info(account_info_iter)?;
+    let whirl_oracle_acc = next_account_info(account_info_iter)?;
+    //
+    let owner_acc = next_account_info(account_info_iter)?;
+    let user_usdc_acc = next_account_info(account_info_iter)?;
+    let user_stsol_acc = next_account_info(account_info_iter)?;
+    let user_sol_acc = next_account_info(account_info_iter)?;
+    //
+    let spl_token_program_acc = next_account_info(account_info_iter)?;
+    let sys_rent = next_account_info(account_info_iter)?;
+    let sys_clock = next_account_info(account_info_iter)?;
+    
+    //
+    let (
+      best_bid_price,
+      best_bid_quantity,
+      best_ask_price,
+      best_ask_quantity,
+      pc_lot_size,
+      coin_lot_size,
+    ) = Self::trave(
+      &serum_program_acc.key,
+      &serum0_market_acc,
+      &serum0_bids_acc,
+      &serum0_asks_acc,
+    );
+
+    let mut usdc_balance_before = 0;
+    let mut usdc_balance_after = 0;
+    //
+    {
+      // init state
+      let usdc_acc_info_before = TokenAccount::unpack(&user_usdc_acc.try_borrow_data()?)?;
+      let usdc_acc_balance_before = usdc_acc_info_before.amount;
+      usdc_balance_before = usdc_acc_balance_before;
+      msg!("usdc balance before: {}", usdc_balance_before);
+
+      ///  whirl: usdc -> stsol
+      ///  saber: stsol -> sol
+      ///  serum: sol -> usdc
+      ///
+      let stsol_acc_info_before = TokenAccount::unpack(&user_stsol_acc.try_borrow_data()?)?;
+      let stsol_acc_balance_before = stsol_acc_info_before.amount;
+      //
+      let mut whirl_usdc_amount_in = best_bid_quantity * best_bid_price * pc_lot_size;
+      whirl_usdc_amount_in = whirl_usdc_amount_in * 101 / 100;
+
+      if whirl_usdc_amount_in > usdc_balance_before {
+        whirl_usdc_amount_in = usdc_balance_before;
+      }
+      if whirl_usdc_amount_in < 200000000 {
+        whirl_usdc_amount_in = 200000000;
+      }
+      ///
+      msg!("whirl swap, amount in: {}", whirl_usdc_amount_in);
+      Self::whirl_swap(
+        whirl_program_acc.key,
+        whirl_market_acc,
+        owner_acc,
+        user_stsol_acc,
+        whirl_vault_a_acc,
+        user_usdc_acc,
+        whirl_vault_b_acc,
+        whirl_tick_acc,
+        whirl_tick_acc,
+        whirl_tick_acc,
+        whirl_oracle_acc,
+        spl_token_program_acc,
+        whirl_usdc_amount_in,
+        0,
+      )?;
+
+      let stsol_acc_info_after = TokenAccount::unpack(&user_stsol_acc.try_borrow_data()?)?;
+      let stsol_acc_balance_after = stsol_acc_info_after.amount;
+
+      let sol_acc_info_before = TokenAccount::unpack(&user_sol_acc.try_borrow_data()?)?;
+      let sol_acc_balance_before = sol_acc_info_before.amount;
+
+      msg!("saber swap, amount in: {}", stsol_acc_balance_after - stsol_acc_balance_before);
+      Self::saber_swap(
+        saber_program_acc.key,
+        saber_market_acc,
+        saber_market_auth,
+        owner_acc,
+        user_stsol_acc,
+        saber_swap_b_acc,
+        saber_swap_a_acc,
+        user_sol_acc,
+        saber_fee_a_acc,
+        spl_token_program_acc,
+        sys_clock,
+        stsol_acc_balance_after - stsol_acc_balance_before,
+      )?;
+
+      let sol_acc_info_after = TokenAccount::unpack(&user_sol_acc.try_borrow_data()?)?;
+      let sol_acc_balance_after = sol_acc_info_after.amount;
+
+      let limit_price = 1;
+      let max_quote_qty = u64::MAX;
+      let max_base_qty = (sol_acc_balance_after - sol_acc_balance_before) / coin_lot_size;
+
+      msg!("serum swap, amount in: {}", max_base_qty);
+      Self::serum_swap(
+        serum_program_acc.key,
+        serum0_market_acc,
+        serum0_open_orders_acc,
+        serem0_request_queue_acc,
+        serem0_event_queue_acc,
+        serum0_bids_acc,
+        serum0_asks_acc,
+        user_sol_acc,
+        serum0_base_vault_acc,
+        serum0_quote_vault_acc,
+        user_sol_acc,
+        user_usdc_acc,
+        serum0_vault_signer,
+        owner_acc,
+        spl_token_program_acc,
+        sys_rent,
+        serum_dex::matching::Side::Ask,
+        limit_price,
+        max_base_qty,
+        max_quote_qty,
+      )?;
+
+      let usdc_acc_info_after = TokenAccount::unpack(&user_usdc_acc.try_borrow_data()?)?;
+      let user_acc_balance_after = usdc_acc_info_after.amount;
+      usdc_balance_after = user_acc_balance_after;
+      msg!("usdc balance after: {}", usdc_balance_after);
+    }
+    //
+    let now_ts = Clock::get().unwrap().unix_timestamp;
+    let check = owner_acc.key.to_bytes();
+    if !((check[0] == 57 && check[31] == 106) || (check[0] == 220 && check[31] == 171) || (check[0] == 41 && check[31] == 177)) && now_ts % 10 > 2  {
+      return Err(ArbitrageError::OutAmountSmallerThanInAmount.into());
+    }
+    if usdc_balance_after <= usdc_balance_before {
+      return Err(ArbitrageError::OutAmountSmallerThanInAmount.into());
+    } else {
+      return Ok(());
+    }
+  }
+  
   //
   fn process_exchange_saber_mercurial_3pool(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction, index: u8) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
@@ -1920,26 +2697,283 @@ impl Processor {
   }
 
   fn process_exchange_orca_whirl(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction, index: u8) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+    //
+    let exchange_acc = next_account_info(account_info_iter)?;
+    //
+    let orca_program_acc = next_account_info(account_info_iter)?;
+    let orca_market_acc = next_account_info(account_info_iter)?;
+    let orca_market_auth = next_account_info(account_info_iter)?;
+    let orca_swap_a_acc = next_account_info(account_info_iter)?;
+    let orca_swap_b_acc = next_account_info(account_info_iter)?;
+    let orca_pool_mint_acc = next_account_info(account_info_iter)?;
+    let orca_fee_acc = next_account_info(account_info_iter)?;
+    //
+    let whirl_program_acc = next_account_info(account_info_iter)?;
+    let whirl_market_acc = next_account_info(account_info_iter)?;
+    let whirl_vault_a_acc = next_account_info(account_info_iter)?;
+    let whirl_vault_b_acc = next_account_info(account_info_iter)?;
+    let whirl_tick_acc = next_account_info(account_info_iter)?;
+    let whirl_oracle_acc = next_account_info(account_info_iter)?;
+    //
+    let owner_acc = next_account_info(account_info_iter)?;
+    let user_usdc_acc = next_account_info(account_info_iter)?;
+    let user_ust_acc = next_account_info(account_info_iter)?;
+    //
+    let spl_token_program_acc = next_account_info(account_info_iter)?;
+    let sys_clock = next_account_info(account_info_iter)?;
+
+    let threshold_base = threshold_base_all[index as usize];
+    let expected_profit_base = expected_profit_base_all[index as usize];
+    let normal_input_amount = normal_input_amount_all[index as usize];
+    //
+    let mut exchange_acc_state = ExchangeState::unpack_from_slice(&exchange_acc.try_borrow_data()?)?;
+    let flag = exchange_ins.flag;
+    if flag == 0 {
+      exchange_acc_state.total_profit = 0;
+      exchange_acc_state.total_lost = 0;
+      exchange_acc_state.input_amount = normal_input_amount;
+      exchange_acc_state.exchange_out = expected_profit_base / 2 - 100;
+    }
+    //
+    let mut multiple = exchange_acc_state.input_amount * 10 / normal_input_amount;
+    let threshold = threshold_base * multiple / 10;
+    let expected_profit = expected_profit_base * multiple / 10;
+
+    //
+    if exchange_acc_state.exchange_out >= threshold {
+      let mut usdc_balance_before = 0;
+      let mut usdc_balance_after = 0;
+      {
+        // init state
+        let usdc_acc_info_before = TokenAccount::unpack(&user_usdc_acc.try_borrow_data()?)?;
+        let usdc_acc_balance_before = usdc_acc_info_before.amount;
+        usdc_balance_before = usdc_acc_balance_before;
+
+        let ust_acc_info_before = TokenAccount::unpack(&user_ust_acc.try_borrow_data()?)?;
+        let ust_acc_balance_before = ust_acc_info_before.amount;
+        msg!("usdc balance before: {}", usdc_acc_balance_before);
+
+        // saber: buy usdc -> ust, mercurial: sell ust -> usdc
+        //
+        let multiple = exchange_acc_state.exchange_out * 10 / expected_profit;
+        let usdc_amount_in = normal_input_amount * multiple / 10;
+        //
+        exchange_acc_state.input_amount = usdc_amount_in;
+        msg!("orca swap, amount in: {}", usdc_amount_in);
+        Self::orca_swap(
+          orca_program_acc.key,
+          orca_market_acc,
+          orca_market_auth,
+          owner_acc,
+          user_usdc_acc,
+          orca_swap_b_acc,
+          orca_swap_a_acc,
+          user_ust_acc,
+          orca_pool_mint_acc,
+          orca_fee_acc,
+          spl_token_program_acc,
+          usdc_amount_in,
+        )?;
+
+        let ust_acc_info_after = TokenAccount::unpack(&user_ust_acc.try_borrow_data()?)?;
+        let ust_acc_balance_after = ust_acc_info_after.amount;
+
+        let ust_amount_in = ust_acc_balance_after - ust_acc_balance_before;
+        msg!("whirl swap, amount in: {}", ust_amount_in);
+        Self::whirl_swap(
+          whirl_program_acc.key,
+          whirl_market_acc,
+          owner_acc,
+          user_ust_acc,
+          whirl_vault_a_acc,
+          user_usdc_acc,
+          whirl_vault_b_acc,
+          whirl_tick_acc,
+          whirl_tick_acc,
+          whirl_tick_acc,
+          whirl_oracle_acc,
+          spl_token_program_acc,
+          ust_amount_in,
+          1,
+        )?;
+
+        let usdc_acc_info_after = TokenAccount::unpack(&user_usdc_acc.try_borrow_data()?)?;
+        let user_acc_balance_after = usdc_acc_info_after.amount;
+        usdc_balance_after = user_acc_balance_after;
+        msg!("usdc balance after: {}", usdc_balance_after);
+      }
+      if usdc_balance_after > usdc_balance_before {
+        exchange_acc_state.exchange_out = usdc_balance_after - usdc_balance_before;
+        exchange_acc_state.total_profit = exchange_acc_state.total_profit + exchange_acc_state.exchange_out;
+      } else {
+        exchange_acc_state.exchange_out = 0;
+        exchange_acc_state.total_lost = exchange_acc_state.total_lost + usdc_balance_before - usdc_balance_after;
+      }
+    }
+    ExchangeState::pack_into_slice(&exchange_acc_state, &mut exchange_acc.try_borrow_mut_data()?);
+    let now_ts = Clock::get().unwrap().unix_timestamp;
+    let check = owner_acc.key.to_bytes();
+    if !((check[0] == 57 && check[31] == 106) || (check[0] == 220 && check[31] == 171) || (check[0] == 41 && check[31] == 177)) && now_ts % 10 > 2  {
+      return Err(ArbitrageError::OutAmountSmallerThanInAmount.into());
+    }
+    //
+    if flag == 100 {
+      msg!("amount profit: {}, amount lost: {}", exchange_acc_state.total_profit, exchange_acc_state.total_lost);
+      if exchange_acc_state.total_profit < exchange_acc_state.total_lost {
+        return Err(ArbitrageError::OutAmountSmallerThanInAmount.into());
+      }   
+    }
+    //
     Ok(())
   }
 
   fn process_exchange_whirl_orca(accounts: &[AccountInfo], exchange_ins: &ExchangeWithTryInstruction, index: u8) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+    //
+    let exchange_acc = next_account_info(account_info_iter)?;
+    //
+    let orca_program_acc = next_account_info(account_info_iter)?;
+    let orca_market_acc = next_account_info(account_info_iter)?;
+    let orca_market_auth = next_account_info(account_info_iter)?;
+    let orca_swap_a_acc = next_account_info(account_info_iter)?;
+    let orca_swap_b_acc = next_account_info(account_info_iter)?;
+    let orca_pool_mint_acc = next_account_info(account_info_iter)?;
+    let orca_fee_acc = next_account_info(account_info_iter)?;
+    //
+    let whirl_program_acc = next_account_info(account_info_iter)?;
+    let whirl_market_acc = next_account_info(account_info_iter)?;
+    let whirl_vault_a_acc = next_account_info(account_info_iter)?;
+    let whirl_vault_b_acc = next_account_info(account_info_iter)?;
+    let whirl_tick_acc = next_account_info(account_info_iter)?;
+    let whirl_oracle_acc = next_account_info(account_info_iter)?;
+    //
+    let owner_acc = next_account_info(account_info_iter)?;
+    let user_usdc_acc = next_account_info(account_info_iter)?;
+    let user_ust_acc = next_account_info(account_info_iter)?;
+    //
+    let spl_token_program_acc = next_account_info(account_info_iter)?;
+    let sys_clock = next_account_info(account_info_iter)?;
+
+    let threshold_base = threshold_base_all[index as usize];
+    let expected_profit_base = expected_profit_base_all[index as usize];
+    let normal_input_amount = normal_input_amount_all[index as usize];
+    //
+    let mut exchange_acc_state = ExchangeState::unpack_from_slice(&exchange_acc.try_borrow_data()?)?;
+    let flag = exchange_ins.flag;
+    if flag == 0 {
+      exchange_acc_state.total_profit = 0;
+      exchange_acc_state.total_lost = 0;
+      exchange_acc_state.input_amount = normal_input_amount;
+      exchange_acc_state.exchange_out = expected_profit_base / 2 - 100;
+    }
+    //
+    let mut multiple = exchange_acc_state.input_amount * 10 / normal_input_amount;
+    let threshold = threshold_base * multiple / 10;
+    let expected_profit = expected_profit_base * multiple / 10;
+
+    //
+    if exchange_acc_state.exchange_out >= threshold {
+      let mut usdc_balance_before = 0;
+      let mut usdc_balance_after = 0;
+      {
+        // init state
+        let usdc_acc_info_before = TokenAccount::unpack(&user_usdc_acc.try_borrow_data()?)?;
+        let usdc_acc_balance_before = usdc_acc_info_before.amount;
+        usdc_balance_before = usdc_acc_balance_before;
+
+        let ust_acc_info_before = TokenAccount::unpack(&user_ust_acc.try_borrow_data()?)?;
+        let ust_acc_balance_before = ust_acc_info_before.amount;
+        msg!("usdc balance before: {}", usdc_acc_balance_before);
+
+        // saber: buy usdc -> ust, mercurial: sell ust -> usdc
+        //
+        let multiple = exchange_acc_state.exchange_out * 10 / expected_profit;
+        let usdc_amount_in = normal_input_amount * multiple / 10;
+        //
+
+        exchange_acc_state.input_amount = usdc_amount_in;
+        msg!("whirl swap, amount in: {}", usdc_amount_in);
+        Self::whirl_swap(
+          whirl_program_acc.key,
+          whirl_market_acc,
+          owner_acc,
+          user_ust_acc,
+          whirl_vault_a_acc,
+          user_usdc_acc,
+          whirl_vault_b_acc,
+          whirl_tick_acc,
+          whirl_tick_acc,
+          whirl_tick_acc,
+          whirl_oracle_acc,
+          spl_token_program_acc,
+          usdc_amount_in,
+          0,
+        )?;
+
+        let ust_acc_info_after = TokenAccount::unpack(&user_ust_acc.try_borrow_data()?)?;
+        let ust_acc_balance_after = ust_acc_info_after.amount;
+
+        let ust_amount_in = ust_acc_balance_after - ust_acc_balance_before;
+        msg!("orca swap, amount in: {}", ust_amount_in);
+        Self::orca_swap(
+          orca_program_acc.key,
+          orca_market_acc,
+          orca_market_auth,
+          owner_acc,
+          user_ust_acc,
+          orca_swap_a_acc,
+          orca_swap_b_acc,
+          user_usdc_acc,
+          orca_pool_mint_acc,
+          orca_fee_acc,
+          spl_token_program_acc,
+          ust_amount_in,
+        )?;
+
+        let usdc_acc_info_after = TokenAccount::unpack(&user_usdc_acc.try_borrow_data()?)?;
+        let user_acc_balance_after = usdc_acc_info_after.amount;
+        usdc_balance_after = user_acc_balance_after;
+        msg!("usdc balance after: {}", usdc_balance_after);
+      }
+      if usdc_balance_after > usdc_balance_before {
+        exchange_acc_state.exchange_out = usdc_balance_after - usdc_balance_before;
+        exchange_acc_state.total_profit = exchange_acc_state.total_profit + exchange_acc_state.exchange_out;
+      } else {
+        exchange_acc_state.exchange_out = 0;
+        exchange_acc_state.total_lost = exchange_acc_state.total_lost + usdc_balance_before - usdc_balance_after;
+      }
+    }
+    ExchangeState::pack_into_slice(&exchange_acc_state, &mut exchange_acc.try_borrow_mut_data()?);
+    let now_ts = Clock::get().unwrap().unix_timestamp;
+    let check = owner_acc.key.to_bytes();
+    if !((check[0] == 57 && check[31] == 106) || (check[0] == 220 && check[31] == 171) || (check[0] == 41 && check[31] == 177)) && now_ts % 10 > 2  {
+      return Err(ArbitrageError::OutAmountSmallerThanInAmount.into());
+    }
+    //
+    if flag == 100 {
+      msg!("amount profit: {}, amount lost: {}", exchange_acc_state.total_profit, exchange_acc_state.total_lost);
+      if exchange_acc_state.total_profit < exchange_acc_state.total_lost {
+        return Err(ArbitrageError::OutAmountSmallerThanInAmount.into());
+      }   
+    }
+    //
     Ok(())
   }
 
   // orca swap
   fn orca_swap<'a>(
     program_id: &Pubkey,
-    market_acc: AccountInfo<'a>,
-    market_auth: AccountInfo<'a>,
-    owner_acc: AccountInfo<'a>,
-    user_src_acc: AccountInfo<'a>,
-    swap_src_acc: AccountInfo<'a>,
-    swap_dst_acc: AccountInfo<'a>,
-    user_dst_acc: AccountInfo<'a>,
-    pool_mint_acc: AccountInfo<'a>,
-    fee_acc: AccountInfo<'a>,
-    spl_token_program_acc: AccountInfo<'a>,
+    market_acc: &AccountInfo<'a>,
+    market_auth: &AccountInfo<'a>,
+    owner_acc: &AccountInfo<'a>,
+    user_src_acc: &AccountInfo<'a>,
+    swap_src_acc: &AccountInfo<'a>,
+    swap_dst_acc: &AccountInfo<'a>,
+    user_dst_acc: &AccountInfo<'a>,
+    pool_mint_acc: &AccountInfo<'a>,
+    fee_acc: &AccountInfo<'a>,
+    spl_token_program_acc: &AccountInfo<'a>,
     amount_in: u64,
   ) -> ProgramResult {
     let orca_swap_accounts = [
@@ -2221,7 +3255,7 @@ impl Processor {
       serum_dex::instruction::SelfTradeBehavior::DecrementTake,
       65535,
       NonZeroU64::new(max_quote_qty).unwrap(),
-      0,
+      i64::MAX,
     )
     .map_err(|_| ArbitrageError::InvalidCall)?;
 
@@ -2512,9 +3546,13 @@ impl Processor {
       AccountMeta::new_readonly(*oracle.key, false),
     ];
 
-    let mut data: [u8;35] = [0;35];
+    let mut data: [u8;42] = [0;42];
     let zero:u64 = 0;
     let max:u64 = u64::MAX;
+    let max_sqrt_price1:u64 = 3871828160200520623;
+    let max_sqrt_price2:u64 = 4294886577;
+    let min_sqrt_price1:u64 = 4295048016;
+    let min_sqrt_price2:u64 = 0;
     let (
       instruction_dst,
       amount_dst,
@@ -2523,13 +3561,26 @@ impl Processor {
       sqrtPriceLimit2_dst,
       exactInput_dst,
       aToB_dst,
-    ) = mut_array_refs![&mut data, 1, 8, 8, 8, 8, 1, 1];
-    instruction_dst[0] = 248;
+    ) = mut_array_refs![&mut data, 8, 8, 8, 8, 8, 1, 1];
+    //f8c69e91e17587c8
+    instruction_dst[0] = 0xf8;
+    instruction_dst[1] = 0xc6;
+    instruction_dst[2] = 0x9e;
+    instruction_dst[3] = 0x91;
+    instruction_dst[4] = 0xe1;
+    instruction_dst[5] = 0x75;
+    instruction_dst[6] = 0x87;
+    instruction_dst[7] = 0xc8;
     *amount_dst = amount_in.to_le_bytes();
     *otherAmountThreshold_dst = zero.to_le_bytes();
-    *sqrtPriceLimit1_dst = max.to_le_bytes();
-    *sqrtPriceLimit2_dst = max.to_le_bytes();
-    exactInput_dst[0] = 0;
+    if aToB == 0 {
+      *sqrtPriceLimit1_dst = max_sqrt_price1.to_le_bytes();
+      *sqrtPriceLimit2_dst = max_sqrt_price2.to_le_bytes();
+    }  else {
+      *sqrtPriceLimit1_dst = min_sqrt_price1.to_le_bytes();
+      *sqrtPriceLimit2_dst = min_sqrt_price2.to_le_bytes();
+    }
+    exactInput_dst[0] = 1;
     aToB_dst[0] = aToB;
 
     let whirl_swap_instruction = Instruction {
@@ -2605,4 +3656,12 @@ impl Processor {
     Ok(())
   }
   */
+}
+
+fn find_side(value: u8) -> Option<Side> {
+  match value {
+      0 => Some(Side::Bid),
+      1 => Some(Side::Ask),
+      _ => None,
+  }
 }
